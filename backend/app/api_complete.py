@@ -18,6 +18,7 @@ from app.models import (
     DocumentUpdateRequest,
     DocumentReindexRequest,
     DocumentUploadResponse,
+    DocumentType,
     QueryRequest,
     QueryResponse,
     Settings,
@@ -30,7 +31,7 @@ from app.diagnostics import get_logger
 # Import services
 from app.storage import DocumentStorage, get_document_storage_service
 from app.parsing import DocumentParser, get_document_parser_service
-from app.chunking import AdaptiveChunker, get_chunking_service
+from app.chunking import AdaptiveChunker, get_chunking_service, rechunk_document_with_params
 from app.embeddings import get_embedder_service, embed_chunks, get_embedding_info
 from app.qdrant_index import get_qdrant_service
 from app.retrieval import get_retrieval_service
@@ -75,7 +76,7 @@ async def upload_document(
     Returns the created Document with metadata.
     """
     try:
-        logger.info(f"Uploading document: {file.filename}")
+        logger.info(f"🔧 FIXED VERSION: Uploading document: {file.filename}")
         
         # Validate file type
         if not file.filename:
@@ -114,7 +115,14 @@ async def upload_document(
                 
                 # Chunk the document
                 chunker = await get_chunking_service()
-                chunked_doc = await chunker.chunk_document(document.id, parsed_data)
+                doc_type_str = parsed_data.get('document_type', 'txt')
+                doc_type = DocumentType(doc_type_str)
+                chunked_doc = await chunker.chunk_document(
+                    document.id, 
+                    parsed_data.get('full_text', ''),
+                    parsed_data.get('structure', {}),
+                    doc_type
+                )
                 
                 # Store chunking results
                 chunk_data = {
@@ -290,7 +298,7 @@ async def reindex_document(
                 # Re-chunk with custom parameters if provided
                 chunker = await get_chunking_service()
                 if reindex_request.chunk_size or reindex_request.chunk_overlap:
-                    chunked_doc = await chunker.rechunk_document_with_params(
+                    chunked_doc = await rechunk_document_with_params(
                         doc_id, 
                         parsed_data,
                         chunk_size=reindex_request.chunk_size,
@@ -298,7 +306,14 @@ async def reindex_document(
                     )
                     logger.info(f"Re-chunked with custom params: size={reindex_request.chunk_size}, overlap={reindex_request.chunk_overlap}")
                 else:
-                    chunked_doc = await chunker.chunk_document(doc_id, parsed_data)
+                    doc_type_str = parsed_data.get('document_type', 'txt')
+                    doc_type = DocumentType(doc_type_str)
+                    chunked_doc = await chunker.chunk_document(
+                        doc_id, 
+                        parsed_data.get('full_text', ''),
+                        parsed_data.get('structure', {}),
+                        doc_type
+                    )
                 
                 # Store updated results
                 chunk_data = {

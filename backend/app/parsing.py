@@ -264,7 +264,7 @@ class DocumentParser:
             clean_text = self._clean_markdown(text)
             
             return {
-                'document_type': 'markdown',
+                'document_type': 'md',
                 'total_headings': len(headings),
                 'total_chars': len(clean_text),
                 'total_words': len(clean_text.split()),
