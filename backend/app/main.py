@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from app.api import router as api_router
+from app.api_complete import router as api_router
 from app.ws import router as ws_router
 from app.settings import get_settings, Settings
 from app.diagnostics import setup_logging, get_logger
@@ -187,6 +187,18 @@ def main():
         reload=settings.debug,
         access_log=settings.debug
     )
+
+
+# Create app instance with environment-aware initialization
+# This prevents unwanted startup during test imports
+import os
+if os.environ.get('RAG_TEST_MODE') == '1':
+    # In test mode, create a minimal app without full initialization
+    from fastapi import FastAPI
+    app = FastAPI(title="RAG Test Mode")
+else:
+    # Normal mode - full app creation
+    app = create_app()
 
 
 if __name__ == "__main__":
