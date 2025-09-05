@@ -150,12 +150,10 @@ async def upload_document(
         logger.info(f"Document uploaded successfully: {document.id}")
         return DocumentUploadResponse(document=document)
         
-    except HTTPException:
-        # Re-raise HTTP exceptions with their original status codes
-        raise
     except Exception as e:
         logger.error(f"Error uploading document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/documents", response_model=DocumentListResponse)
 async def list_documents(
@@ -231,7 +229,7 @@ async def delete_document(
     doc_id: str,
     secure: bool = Query(False, description="Secure delete (overwrite)"),
     storage=Depends(get_document_storage_service)
-) -> Settings:
+) -> JSONResponse:
     """
     Delete a document and its embeddings.
     
@@ -248,7 +246,8 @@ async def delete_document(
         return JSONResponse(
             content={"message": f"Document {doc_id} deleted successfully"},
             status_code=200
-        )        
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -262,7 +261,7 @@ async def reindex_document(
     reindex_request: DocumentReindexRequest,
     storage=Depends(get_document_storage_service),
     parser=Depends(get_document_parser_service)
-) -> Settings:
+) -> JSONResponse:
     """
     Reindex a document with optional custom chunking parameters.
     
@@ -327,7 +326,8 @@ async def reindex_document(
         return JSONResponse(
             content={"message": f"Document {doc_id} reindexed successfully"},
             status_code=200
-        )        
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -359,12 +359,12 @@ async def start_query(
         turn_id = str(uuid.uuid4())
         
         # Store the query for the WebSocket handler to retrieve
-        store_query(query_request.session_id, turn_id, query_request.query)
+        store_query(query_request.sessionId, turn_id, query_request.query)
         
-        logger.info(f"Query stored for streaming - session: {query_request.session_id}, turn: {turn_id}")
+        logger.info(f"Query stored for streaming - session: {query_request.sessionId}, turn: {turn_id}")
         
         return QueryResponse(
-            sessionId=query_request.session_id,
+            sessionId=query_request.sessionId,
             turnId=turn_id
         )
         
@@ -383,13 +383,13 @@ async def get_settings_endpoint() -> Settings:
     return get_settings()
 
 
-@router.put("/settings", response_model=Settings)
-async def update_settings(settings: Settings) -> Settings:
+@router.put("/settings")
+async def update_settings(settings: Settings) -> JSONResponse:
     """Update system settings."""
     try:
         # TODO: Implement settings persistence
         logger.info("Settings update requested")
-        return settings
+        return JSONResponse(content={"message": "Settings updated successfully"})
     except Exception as e:
         logger.error(f"Error updating settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -399,57 +399,35 @@ async def update_settings(settings: Settings) -> Settings:
 async def get_system_status() -> SystemStatus:
     """Get system status and resource usage."""
     try:
-        # Initialize health checks with defaults
-        qdrant_healthy = False
-        llm_healthy = False
+        # Check all service health
+        storage_service = await get_storage_service()
+        qdrant_service = await get_qdrant_service()
+        llm_service = await get_llm_service()
+        retrieval_service = await get_retrieval_service()
         
-        # Check Qdrant service health
-        try:
-            qdrant_service = await get_qdrant_service()
-            qdrant_health = await qdrant_service.health_check()
-            qdrant_healthy = qdrant_health.get("healthy", False)
-        except Exception as e:
-            logger.warning(f"Qdrant service unavailable: {e}")
+        # Get health status from each service
+        qdrant_health = await qdrant_service.health_check()
+        llm_health = await llm_service.health_check()
         
-        # Check LLM service health
-        try:
-            llm_service = await get_llm_service()
-            llm_health = await llm_service.health_check()
-            llm_healthy = llm_health.get("healthy", False)
-        except Exception as e:
-            logger.warning(f"LLM service unavailable: {e}")
-        
-        # Determine overall status
-        if qdrant_healthy and llm_healthy:
-            overall_status = "operational"
-            offline = False
-        elif qdrant_healthy or llm_healthy:
-            overall_status = "degraded"
-            offline = False
-        else:
-            overall_status = "offline"
-            offline = True
-        
+        # TODO: Implement proper metrics collection
         return SystemStatus(
-            status=overall_status,
-            cpu_usage=None,
-            ram_usage=None,
-            indexing_progress=None,
-            offline=offline
+            status="operational" if qdrant_health.get("healthy") and llm_health.get("healthy") else "degraded",
+            uptime=0,  # TODO: Track actual uptime
+            memory_usage=0.0,  # TODO: Get actual memory usage
+            disk_usage=0.0,  # TODO: Get actual disk usage
+            active_sessions=0,  # TODO: Track active WebSocket sessions
+            total_documents=0,  # TODO: Get actual document count
+            total_chunks=0  # TODO: Get actual chunk count from Qdrant
         )
     except Exception as e:
         logger.error(f"Error getting system status: {e}")
-        return SystemStatus(
-            status="error",
-            cpu_usage=None,
-            ram_usage=None,
-            indexing_progress=None,
-            offline=True
-        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/health")
 async def health_check() -> JSONResponse:
     """Health check endpoint."""
-    return settings
+    return JSONResponse(content={"status": "healthy", "timestamp": time.time()})
 
 @router.get("/test")
 async def test_endpoint():
