@@ -76,6 +76,7 @@ class DocumentUploadResponse(BaseModel):
     """Response for document upload"""
     document: Document
     message: str = "Document uploaded successfully"
+    is_duplicate: bool = False
 
 
 class DocumentListResponse(BaseModel):

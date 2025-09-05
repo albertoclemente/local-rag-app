@@ -53,7 +53,7 @@ class DocumentStorage:
         """Get path for storing raw uploaded file"""
         # Use doc_id as subdirectory for organization
         doc_dir = Path(self.settings.library_raw_dir) / doc_id
-        doc_dir.mkdir(exist_ok=True)
+        doc_dir.mkdir(parents=True, exist_ok=True)
         return doc_dir / filename
     
     def _get_parsed_file_path(self, doc_id: str) -> Path:
@@ -86,13 +86,28 @@ class DocumentStorage:
             Document with metadata
         """
         with performance_context("store_uploaded_file", filename=filename):
-            # Generate unique document ID
-            doc_id = str(uuid.uuid4())
-            
             # Determine file type
             file_ext = filename.split('.')[-1].lower()
             if file_ext not in ['pdf', 'txt', 'docx', 'md', 'epub']:
                 raise ValueError(f"Unsupported file type: {file_ext}")
+            
+            # Calculate file hash BEFORE storing to check for duplicates
+            import tempfile
+            import hashlib
+            
+            sha256_hash = hashlib.sha256()
+            sha256_hash.update(file_content)
+            file_hash = sha256_hash.hexdigest()
+            
+            # Check for existing document with same hash
+            existing_doc = await self.find_duplicate_by_hash(file_hash)
+            if existing_doc:
+                logger.info(f"Duplicate file detected: {filename} matches existing document {existing_doc.id}")
+                # Return the existing document instead of creating a new one
+                return existing_doc
+            
+            # Generate unique document ID
+            doc_id = str(uuid.uuid4())
             
             # Store raw file
             raw_file_path = self._get_raw_file_path(doc_id, filename)
@@ -100,9 +115,6 @@ class DocumentStorage:
             try:
                 with open(raw_file_path, 'wb') as f:
                     f.write(file_content)
-                
-                # Calculate file hash for integrity
-                file_hash = self._calculate_file_hash(raw_file_path)
                 
                 # Create document metadata
                 document = Document(
@@ -162,6 +174,34 @@ class DocumentStorage:
             
         except Exception as e:
             logger.error(f"Failed to load metadata for document {doc_id}: {e}")
+            return None
+    
+    async def find_duplicate_by_hash(self, file_hash: str) -> Optional[Document]:
+        """Find existing document with the same file hash"""
+        try:
+            # Check all document metadata files for matching hash
+            config_dir = Path(self.settings.config_dir)
+            for metadata_file in config_dir.glob("doc_*.json"):
+                try:
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                    
+                    if metadata.get('file_hash') == file_hash:
+                        # Remove internal fields before creating Document
+                        doc_metadata = metadata.copy()
+                        doc_metadata.pop('file_hash', None)
+                        doc_metadata.pop('updated_at', None)
+                        
+                        return Document(**doc_metadata)
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to read metadata file {metadata_file}: {e}")
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error searching for duplicate by hash: {e}")
             return None
     
     async def update_document_metadata(self, doc_id: str, updates: Dict[str, Any]) -> Optional[Document]:
