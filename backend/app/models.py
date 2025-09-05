@@ -1,0 +1,213 @@
+"""
+Pydantic models for API requests/responses and internal data structures.
+Follows the specifications from LLD and UI Spec.
+"""
+
+from datetime import datetime
+from enum import Enum
+from typing import List, Optional, Dict, Any, Union
+from pydantic import BaseModel, Field, ConfigDict
+
+
+class DocumentType(str, Enum):
+    """Supported document types"""
+    PDF = "pdf"
+    DOCX = "docx"
+    TXT = "txt"
+    MD = "md"
+    EPUB = "epub"
+
+
+class DocumentStatus(str, Enum):
+    """Document indexing status"""
+    INDEXED = "indexed"
+    NEEDS_REINDEX = "needs-reindex"
+    ERROR = "error"
+    INDEXING = "indexing"
+
+
+class EmbeddingStatus(str, Enum):
+    """Document embedding status"""
+    NOT_INDEXED = "not_indexed"
+    INDEXED = "indexed"
+    INDEXING = "indexing"
+    ERROR = "error"
+
+
+class Profile(str, Enum):
+    """System performance profiles"""
+    ECO = "eco"
+    BALANCED = "balanced"
+    PERFORMANCE = "performance"
+
+
+class UiStatus(str, Enum):
+    """UI streaming status"""
+    IDLE = "idle"
+    RETRIEVING = "retrieving"
+    STREAMING = "streaming"
+    COMPLETE = "complete"
+    ERROR = "error"
+
+
+class Document(BaseModel):
+    """Document metadata model"""
+    id: str
+    name: str
+    type: DocumentType
+    size_bytes: int = Field(alias="sizeBytes")
+    pages: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
+    status: DocumentStatus = DocumentStatus.INDEXING
+    embedding_status: EmbeddingStatus = EmbeddingStatus.NOT_INDEXED
+    added_at: datetime = Field(alias="addedAt", default_factory=datetime.utcnow)
+    last_indexed: Optional[float] = Field(alias="lastIndexed", default=None)
+    chunk_params: Optional[Dict[str, Any]] = None
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat()
+        }
+    )
+
+
+class DocumentUploadResponse(BaseModel):
+    """Response for document upload"""
+    document: Document
+    message: str = "Document uploaded successfully"
+
+
+class DocumentListResponse(BaseModel):
+    """Response for document listing"""
+    documents: List[Document]
+    total: int
+
+
+class DocumentUpdateRequest(BaseModel):
+    """Request for updating document metadata"""
+    name: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class DocumentReindexRequest(BaseModel):
+    """Request for manual reindexing with custom params"""
+    chunk_size: Optional[int] = None
+    chunk_overlap: Optional[int] = None
+    force: bool = False
+
+
+class Citation(BaseModel):
+    """Citation reference"""
+    label: int
+    doc_id: str = Field(alias="docId")
+    chunk_id: str = Field(alias="chunkId")
+    page_start: Optional[int] = Field(alias="pageStart", default=None)
+
+    model_config = ConfigDict(populate_by_name=True)
+class SourceItem(BaseModel):
+    """Retrieved source item with snippet"""
+    label: int
+    doc_id: str = Field(alias="docId")
+    chunk_id: str = Field(alias="chunkId")
+    page_start: Optional[int] = Field(alias="pageStart", default=None)
+    text: str
+    score: Optional[float] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+class ChatTurn(BaseModel):
+    """Chat turn (query/response pair)"""
+    id: str
+    role: str  # "user" | "assistant" | "system"
+    content: str
+    citations: Optional[List[Citation]] = None
+    created_at: datetime = Field(alias="createdAt", default_factory=datetime.utcnow)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat()
+        }
+    )
+
+
+class QueryRequest(BaseModel):
+    """Request for starting a query"""
+    query: str = Field(min_length=1, max_length=2000)
+    session_id: str = Field(alias="sessionId")
+    
+    model_config = ConfigDict(populate_by_name=True)
+class QueryResponse(BaseModel):
+    """Response from query initiation"""
+    session_id: str = Field(alias="sessionId")
+    turn_id: str = Field(alias="turnId")
+    message: str = "Query started"
+
+    model_config = ConfigDict(populate_by_name=True)
+# WebSocket event models
+class StreamEventBase(BaseModel):
+    """Base class for streaming events"""
+    event: str
+
+
+class StartEvent(StreamEventBase):
+    """Stream start event"""
+    event: str = "START"
+    meta: Dict[str, str]  # {"model": "model_name"}
+
+
+class TokenEvent(StreamEventBase):
+    """Token streaming event"""
+    event: str = "TOKEN"
+    text: str
+
+
+class CitationEvent(StreamEventBase):
+    """Citation event"""
+    event: str = "CITATION"
+    label: int
+    chunk_id: str = Field(alias="chunkId")
+
+    model_config = ConfigDict(populate_by_name=True)
+class EndEvent(StreamEventBase):
+    """Stream end event"""
+    event: str = "END"
+    stats: Dict[str, Union[int, float]]  # {"tokens": N, "ms": T}
+
+
+class ErrorEvent(StreamEventBase):
+    """Stream error event"""
+    event: str = "ERROR"
+    error_code: str
+    detail: str
+
+
+# Union type for all streaming events
+StreamEvent = Union[StartEvent, TokenEvent, CitationEvent, EndEvent, ErrorEvent]
+
+
+class Settings(BaseModel):
+    """System settings"""
+    profile: Profile = Profile.BALANCED
+    chunking_mode: str = "auto"  # "auto" | "manual"
+    k_min: int = Field(default=3, ge=1, le=20)
+    k_max: int = Field(default=10, ge=1, le=50)
+    context_budget: int = Field(default=4000, ge=1000, le=32000)
+    encryption_enabled: bool = False
+    model_preset: str = "default"
+
+
+class SystemStatus(BaseModel):
+    """System status information"""
+    status: str = "ready"
+    cpu_usage: Optional[float] = None
+    ram_usage: Optional[float] = None
+    indexing_progress: Optional[Dict[str, Any]] = None
+    offline: bool = True
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response"""
+    error: str
+    detail: Optional[str] = None
+    error_code: Optional[str] = None
