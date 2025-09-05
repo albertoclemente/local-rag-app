@@ -1,0 +1,32 @@
+# Sample Document for RAG Testing
+
+## Introduction
+This is a sample document created for testing the Local RAG WebApp functionality. This document contains various types of content to test the parsing, chunking, and retrieval capabilities.
+
+## Technical Overview
+The Local RAG WebApp is designed to process documents locally without sending data to external services. It uses:
+
+1. **Document Processing**: Parses PDF, TXT, and other formats
+2. **Adaptive Chunking**: Automatically determines optimal chunk sizes
+3. **Local Embeddings**: Uses sentence-transformers models
+4. **Vector Storage**: Qdrant for similarity search
+5. **Language Model**: Local LLM for answer generation
+
+## Features
+- Document upload and management
+- Real-time chat interface  
+- Citation tracking and source references
+- Performance monitoring
+- Local-only operation for privacy
+
+## Test Scenarios
+This document should be processed through the following pipeline:
+1. Upload via the web interface
+2. Parse text content
+3. Apply adaptive chunking algorithm
+4. Generate embeddings using local model
+5. Index vectors in Qdrant
+6. Enable retrieval for Q&A
+
+## Conclusion
+This sample document provides sufficient content to test the core RAG functionality including document ingestion, processing, and retrieval capabilities.
