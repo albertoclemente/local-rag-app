@@ -9,10 +9,13 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query as WSQuery
 from fastapi.websockets import WebSocketState
 
+from app.conversation import get_conversation_manager
+
 from app.models import (
     StartEvent,
     TokenEvent,
     CitationEvent,
+    SourcesEvent,
     EndEvent,
     ErrorEvent,
     StreamEvent
@@ -119,8 +122,9 @@ async def process_streaming_query(
         await manager.send_event(connection_id, start_event)
         
         # Perform retrieval
-        logger.info(f"Performing retrieval for query: {query}")
-        retrieval_result = await retrieval_service.retrieve(query)
+        logger.info(f"🔍 WS DEBUG: About to call retrieve_for_query for: {query}")
+        retrieval_result = await retrieval_service.retrieve_for_query(query)
+        logger.info(f"🔍 WS DEBUG: Retrieval completed. Found {len(retrieval_result.chunks)} chunks")
         
         # Send CITATION events for retrieved chunks
         for i, chunk in enumerate(retrieval_result.chunks, 1):
@@ -130,16 +134,38 @@ async def process_streaming_query(
             )
             await manager.send_event(connection_id, citation_event)
         
+        # Send SOURCES event with detailed source information
+        if retrieval_result.chunks:
+            sources_info = [
+                {
+                    "document": chunk.doc_id,
+                    "content": chunk.text[:100] + "..." if len(chunk.text) > 100 else chunk.text,
+                    "score": chunk.score
+                }
+                for chunk in retrieval_result.chunks
+            ]
+            sources_event = SourcesEvent(sources=sources_info)
+            await manager.send_event(connection_id, sources_event)
+        
+        # Get conversation context
+        conversation_mgr = get_conversation_manager()
+        conversation_context = conversation_mgr.get_context_for_query(session_id)
+        
         # Start LLM streaming
         logger.info(f"Starting LLM generation for query: {query}")
+        if conversation_context:
+            logger.info(f"Using conversation context for session {session_id}")
+        
         token_count = 0
         start_time = asyncio.get_event_loop().time()
+        full_response_parts = []
         
-        async for stream_token in llm_service.generate_stream(query, retrieval_result):
+        async for stream_token in llm_service.generate_stream(query, retrieval_result, conversation_context):
             if stream_token.text:
                 token_event = TokenEvent(text=stream_token.text)
                 await manager.send_event(connection_id, token_event)
                 token_count += 1
+                full_response_parts.append(stream_token.text)
             
             # Check if generation is complete
             if stream_token.is_final:
@@ -159,6 +185,22 @@ async def process_streaming_query(
             "query_complexity": retrieval_result.query_complexity.value
         })
         await manager.send_event(connection_id, end_event)
+        
+        # Add this conversation turn to the session history
+        full_response = ''.join(full_response_parts)
+        # Reuse the sources_info created earlier during SOURCES event
+        if retrieval_result.chunks:
+            sources_info = [
+                {
+                    "document": chunk.doc_id,
+                    "content": chunk.text[:100] + "..." if len(chunk.text) > 100 else chunk.text,
+                    "score": chunk.score
+                }
+                for chunk in retrieval_result.chunks
+            ]
+        else:
+            sources_info = []
+        conversation_mgr.add_turn(session_id, turn_id, query, full_response, sources_info)
         
         logger.info(f"Completed streaming for session {session_id}, turn {turn_id} - {token_count} tokens in {generation_time_ms}ms")
         

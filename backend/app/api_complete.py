@@ -37,6 +37,7 @@ from app.qdrant_index import get_qdrant_service
 from app.retrieval import get_retrieval_service
 from app.llm import get_llm_service
 from app.ws import store_query
+from app.conversation import get_conversation_manager
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -136,12 +137,34 @@ async def upload_document(
                 # Store chunks alongside parsed content
                 parsed_data["chunking"] = chunk_data
                 await storage.store_parsed_content(document.id, parsed_data)
+
+                # Embed the chunks
+                try:
+                    logger.info(f"Creating embeddings for {len(chunked_doc.chunks)} chunks...")
+                    
+                    # Convert chunks to the format expected by embed_chunks
+                    chunk_dicts = [{"text": chunk} for chunk in chunked_doc.chunks]
+                    embedded_chunks = await embed_chunks(chunk_dicts)
+                    
+                    # Store embeddings in vector database
+                    qdrant = await get_qdrant_service()
+                    await qdrant.index_chunks(embedded_chunks, document.id)
+                    
+                    # Update document status to include embeddings
+                    await storage.update_document_metadata(
+                        document.id, 
+                        {"status": "indexed", "embedding_status": "indexed"}
+                    )
+                    logger.info(f"Embeddings created successfully for document {document.id}")
+                    
+                except Exception as embed_error:
+                    logger.error(f"Failed to create embeddings for document {document.id}: {embed_error}")
+                    # Document is still chunked, just not embedded
+                    await storage.update_document_metadata(
+                        document.id, 
+                        {"status": "indexed", "embedding_status": "error"}
+                    )
                 
-                # Update document status
-                await storage.update_document_metadata(
-                    document.id, 
-                    {"status": "indexed"}
-                )
                 document.status = "indexed"  # type: ignore
                 
                 logger.info(
@@ -374,12 +397,12 @@ async def start_query(
         turn_id = str(uuid.uuid4())
         
         # Store the query for the WebSocket handler to retrieve
-        store_query(query_request.sessionId, turn_id, query_request.query)
+        store_query(query_request.session_id, turn_id, query_request.query)
         
-        logger.info(f"Query stored for streaming - session: {query_request.sessionId}, turn: {turn_id}")
+        logger.info(f"Query stored for streaming - session: {query_request.session_id}, turn: {turn_id}")
         
         return QueryResponse(
-            sessionId=query_request.sessionId,
+            sessionId=query_request.session_id,
             turnId=turn_id
         )
         
@@ -448,3 +471,51 @@ async def health_check() -> JSONResponse:
 async def test_endpoint():
     """Simple test endpoint."""
     return {"message": "API is working", "router": "functional"}
+
+# Conversation session management endpoints
+
+@router.get("/sessions")
+async def list_sessions():
+    """List all active conversation sessions"""
+    conversation_mgr = get_conversation_manager()
+    return {"sessions": conversation_mgr.get_all_sessions()}
+
+@router.get("/sessions/{session_id}")
+async def get_session_info(session_id: str):
+    """Get information about a specific session"""
+    conversation_mgr = get_conversation_manager()
+    session_info = conversation_mgr.get_session_info(session_id)
+    
+    if not session_info:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return session_info
+
+@router.get("/sessions/{session_id}/history")
+async def get_session_history(session_id: str):
+    """Get conversation history for a session"""
+    conversation_mgr = get_conversation_manager()
+    turns = conversation_mgr.get_session_turns(session_id)
+    
+    if turns is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {"session_id": session_id, "turns": turns}
+
+@router.delete("/sessions/{session_id}/context")
+async def clear_session_context(session_id: str):
+    """Clear conversation context for a session"""
+    conversation_mgr = get_conversation_manager()
+    success = conversation_mgr.clear_session_context(session_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {"message": "Session context cleared", "session_id": session_id}
+
+@router.post("/sessions/cleanup")
+async def cleanup_old_sessions():
+    """Clean up old inactive sessions"""
+    conversation_mgr = get_conversation_manager()
+    conversation_mgr.cleanup_old_sessions()
+    return {"message": "Old sessions cleaned up"}

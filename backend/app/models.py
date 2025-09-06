@@ -63,6 +63,7 @@ class Document(BaseModel):
     added_at: datetime = Field(alias="addedAt", default_factory=datetime.utcnow)
     last_indexed: Optional[float] = Field(alias="lastIndexed", default=None)
     chunk_params: Optional[Dict[str, Any]] = None
+    chunk_count: int = Field(alias="chunkCount", default=0)
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -145,6 +146,50 @@ class QueryResponse(BaseModel):
     message: str = "Query started"
 
     model_config = ConfigDict(populate_by_name=True)
+
+# Conversation context models
+class ConversationTurn(BaseModel):
+    """A single turn in a conversation"""
+    turn_id: str
+    query: str
+    response: str
+    timestamp: datetime
+    sources: List[Dict] = Field(default_factory=list)
+
+class ConversationSession(BaseModel):
+    """A conversation session with history"""
+    session_id: str
+    turns: List[ConversationTurn] = Field(default_factory=list)
+    created_at: datetime
+    last_active: datetime
+    
+    def add_turn(self, turn_id: str, query: str, response: str, sources: List[Dict] = None):
+        """Add a new turn to the conversation"""
+        turn = ConversationTurn(
+            turn_id=turn_id,
+            query=query,
+            response=response,
+            timestamp=datetime.now(),
+            sources=sources or []
+        )
+        self.turns.append(turn)
+        self.last_active = datetime.now()
+    
+    def get_context_for_llm(self, max_turns: int = 5) -> str:
+        """Get formatted conversation context for LLM"""
+        if not self.turns:
+            return ""
+        
+        # Get recent turns (up to max_turns)
+        recent_turns = self.turns[-max_turns:]
+        
+        context_parts = ["Previous conversation:"]
+        for turn in recent_turns:
+            context_parts.append(f"User: {turn.query}")
+            context_parts.append(f"Assistant: {turn.response}")
+        
+        return "\n".join(context_parts)
+
 # WebSocket event models
 class StreamEventBase(BaseModel):
     """Base class for streaming events"""
@@ -170,10 +215,16 @@ class CitationEvent(StreamEventBase):
     chunk_id: str = Field(alias="chunkId")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class SourcesEvent(StreamEventBase):
+    """Sources event containing detailed source information"""
+    event: str = "SOURCES"
+    sources: List[Dict[str, Any]]
 class EndEvent(StreamEventBase):
     """Stream end event"""
     event: str = "END"
-    stats: Dict[str, Union[int, float]]  # {"tokens": N, "ms": T}
+    stats: Dict[str, Union[int, float, str]]  # {"tokens": N, "ms": T, "complexity": "simple"}
 
 
 class ErrorEvent(StreamEventBase):
@@ -184,7 +235,7 @@ class ErrorEvent(StreamEventBase):
 
 
 # Union type for all streaming events
-StreamEvent = Union[StartEvent, TokenEvent, CitationEvent, EndEvent, ErrorEvent]
+StreamEvent = Union[StartEvent, TokenEvent, CitationEvent, SourcesEvent, EndEvent, ErrorEvent]
 
 
 class Settings(BaseModel):

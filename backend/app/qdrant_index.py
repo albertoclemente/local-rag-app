@@ -148,21 +148,15 @@ class QdrantIndex:
         logger.info(f"Connecting to Qdrant at {self.qdrant_url}")
         
         try:
-            # Try to create client with server URL first
-            try:
-                self.client = QdrantClient(url=self.qdrant_url)
-                await self._test_connection()
-                logger.info(f"Connected to Qdrant server at {self.qdrant_url}")
-            except Exception as server_error:
-                logger.warning(f"Cannot connect to Qdrant server: {server_error}")
-                logger.info(f"Falling back to local file-based Qdrant at {self.qdrant_path}")
-                
-                # Create data directory if it doesn't exist
-                Path(self.qdrant_path).mkdir(parents=True, exist_ok=True)
-                
-                # Create local file-based client
-                self.client = QdrantClient(path=self.qdrant_path)
-                logger.info(f"Using local Qdrant at {self.qdrant_path}")
+            # Skip server mode and go directly to file-based for reliability
+            logger.info(f"Using file-based Qdrant at {self.qdrant_path}")
+            
+            # Create data directory if it doesn't exist
+            Path(self.qdrant_path).mkdir(parents=True, exist_ok=True)
+            
+            # Create local file-based client
+            self.client = QdrantClient(path=self.qdrant_path)
+            logger.info(f"✅ Using file-based Qdrant at {self.qdrant_path}")
             
             # Ensure collection exists
             await self._ensure_collection()
@@ -336,8 +330,11 @@ class QdrantIndex:
                     stats['skipped'] += 1
                     continue
                 
-                # Create point
-                point_id = f"{doc_id}_{chunk.get('chunk_id', i)}"
+                # Create point with UUID
+                # Use deterministic UUID based on doc_id and chunk_id for consistency
+                import hashlib
+                point_key = f"{doc_id}_{chunk.get('chunk_id', i)}"
+                point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, point_key))
                 
                 # Prepare payload with metadata
                 payload = {
@@ -357,9 +354,16 @@ class QdrantIndex:
                             payload[f"meta_{key}"] = value
                 
                 # Create point
+                if isinstance(chunk['embedding'], np.ndarray):
+                    vector_data = chunk['embedding'].tolist()
+                else:
+                    vector_data = chunk['embedding']
+                
+                logger.info(f"Creating point {point_id} with vector type: {type(vector_data)}, shape: {len(vector_data) if isinstance(vector_data, list) else 'unknown'}")
+                
                 point = PointStruct(
                     id=point_id,
-                    vector=chunk['embedding'],
+                    vector=vector_data,
                     payload=payload
                 )
                 
@@ -373,6 +377,7 @@ class QdrantIndex:
         # Batch insert points
         if points:
             try:
+                logger.info(f"Upserting {len(points)} points. First point vector type: {type(points[0].vector) if points else 'none'}")
                 loop = asyncio.get_event_loop()
                 operation_info = await loop.run_in_executor(
                     None,
@@ -380,6 +385,7 @@ class QdrantIndex:
                     self.COLLECTION_NAME,
                     points
                 )
+                logger.info(f"Upsert operation result: {operation_info}")
                 
                 # Wait for operation to complete
                 if hasattr(operation_info, 'operation_id'):
@@ -440,12 +446,13 @@ class QdrantIndex:
             loop = asyncio.get_event_loop()
             search_result = await loop.run_in_executor(
                 None,
-                self.client.search,
-                self.COLLECTION_NAME,
-                query_vector,
-                query_filter,
-                limit,
-                score_threshold
+                lambda: self.client.search(
+                    collection_name=self.COLLECTION_NAME,
+                    query_vector=query_vector,
+                    query_filter=query_filter,
+                    limit=limit,
+                    score_threshold=score_threshold
+                )
             )
             
             # Convert results to our format
@@ -556,6 +563,41 @@ class QdrantIndex:
                 'error': str(e),
                 'available': False
             }
+
+    async def get_document_chunk_count(self, doc_id: str) -> int:
+        """Get the number of chunks for a specific document"""
+        if self.client is None:
+            return 0
+        
+        await self.initialize()
+        loop = asyncio.get_event_loop()
+        
+        try:
+            # Simple approach: get all points and count manually
+            # This avoids complex filter instantiation issues
+            search_results = await loop.run_in_executor(
+                None,
+                lambda: self.client.scroll(
+                    collection_name=self.COLLECTION_NAME,
+                    limit=10000,  # Large limit to get all chunks
+                    with_payload=True,  # Need payload to check doc_id
+                    with_vectors=False
+                )
+            )
+            
+            points, _ = search_results
+            
+            # Count points that match our document ID
+            count = 0
+            for point in points:
+                if hasattr(point, 'payload') and point.payload and point.payload.get('doc_id') == doc_id:
+                    count += 1
+            
+            return count
+                
+        except Exception as e:
+            logger.error(f"Error counting chunks for document {doc_id}: {e}")
+            return 0
     
     async def health_check(self) -> Dict[str, Any]:
         """Check Qdrant health status."""
@@ -597,34 +639,40 @@ class QdrantIndex:
     
     async def _wait_for_operation(self, operation_id: int, timeout: float = 30.0) -> bool:
         """Wait for a Qdrant operation to complete."""
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout:
-            try:
-                loop = asyncio.get_event_loop()
-                operations = await loop.run_in_executor(
-                    None,
-                    self.client.get_operations
-                )
-                
-                # Check if operation is still running
-                for op in operations.operations:
-                    if op.operation_id == operation_id:
-                        if op.status != UpdateStatus.COMPLETED:
-                            await asyncio.sleep(0.1)
-                            continue
-                        else:
-                            return True
-                
-                # Operation not found, assume completed
-                return True
-                
-            except Exception as e:
-                logger.warning(f"Error checking operation status: {e}")
-                await asyncio.sleep(0.1)
-        
-        logger.warning(f"Operation {operation_id} timeout after {timeout}s")
-        return False
+        # For file-based Qdrant, operations are synchronous, so we don't need to wait
+        if hasattr(self.client, '_client') and hasattr(self.client._client, 'grpc_client'):
+            # Server-based client - check operations
+            start_time = time.time()
+            
+            while time.time() - start_time < timeout:
+                try:
+                    loop = asyncio.get_event_loop()
+                    operations = await loop.run_in_executor(
+                        None,
+                        self.client.get_operations
+                    )
+                    
+                    # Check if operation is still running
+                    for op in operations.operations:
+                        if op.operation_id == operation_id:
+                            if op.status != UpdateStatus.COMPLETED:
+                                await asyncio.sleep(0.1)
+                                continue
+                            else:
+                                return True
+                    
+                    # Operation not found, assume completed
+                    return True
+                    
+                except Exception as e:
+                    logger.warning(f"Error checking operation status: {e}")
+                    return True  # Assume completed on error
+            
+            logger.warning(f"Operation {operation_id} timeout after {timeout}s")
+            return False
+        else:
+            # File-based client - operations are synchronous, so always return True
+            return True
     
     async def cleanup(self) -> None:
         """Clean up resources."""
