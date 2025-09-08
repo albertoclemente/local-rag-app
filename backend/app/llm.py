@@ -78,13 +78,14 @@ class LLMEngine(ABC):
     @abstractmethod
     async def generate_stream(
         self, 
-        request: GenerationRequest
+        request: GenerationRequest,
+        conversation_context: str = ""
     ) -> AsyncGenerator[StreamToken, None]:
         """Generate streaming response"""
         pass
     
     @abstractmethod
-    async def generate(self, request: GenerationRequest) -> GenerationResult:
+    async def generate(self, request: GenerationRequest, conversation_context: str = "") -> GenerationResult:
         """Generate complete response"""
         pass
     
@@ -112,12 +113,12 @@ class OllamaEngine(LLMEngine):
         """Get or create HTTP session"""
         if self.session is None:
             self.session = httpx.AsyncClient(
-                timeout=httpx.Timeout(60.0),
+                timeout=httpx.Timeout(120.0),  # Extended to 120 seconds for complex ML queries
                 limits=httpx.Limits(max_connections=10)
             )
         return self.session
     
-    async def _build_prompt(self, request: GenerationRequest) -> str:
+    async def _build_prompt(self, request: GenerationRequest, conversation_context: str = "") -> str:
         """Build the complete prompt with context and citations"""
         prompt_parts = []
         
@@ -128,9 +129,14 @@ When answering:
 2. Be accurate and concise
 3. If the context doesn't contain enough information, say so
 4. Include citation numbers [1], [2], etc. when referencing specific sources
-5. Provide a clear, well-structured response"""
+5. Provide a clear, well-structured response
+6. If there is previous conversation context, use it to understand references like "it", "they", "this", etc."""
         
         prompt_parts.append(f"System: {system_prompt}\n")
+        
+        # Add conversation context if available
+        if conversation_context:
+            prompt_parts.append(f"\n{conversation_context}\n")
         
         # Add retrieved context if available
         if request.retrieval_result and request.retrieval_result.chunks:
@@ -147,13 +153,14 @@ When answering:
     
     async def generate_stream(
         self, 
-        request: GenerationRequest
+        request: GenerationRequest,
+        conversation_context: str = ""
     ) -> AsyncGenerator[StreamToken, None]:
         """Generate streaming response via Ollama"""
         session = await self._get_session()
         
         # Build the full prompt
-        full_prompt = await self._build_prompt(request)
+        full_prompt = await self._build_prompt(request, conversation_context)
         
         # Prepare Ollama request
         ollama_request = {
@@ -222,12 +229,12 @@ When answering:
                 metadata={"error": True}
             )
     
-    async def generate(self, request: GenerationRequest) -> GenerationResult:
+    async def generate(self, request: GenerationRequest, conversation_context: str = "") -> GenerationResult:
         """Generate complete response via Ollama"""
         session = await self._get_session()
         
         # Build the full prompt
-        full_prompt = await self._build_prompt(request)
+        full_prompt = await self._build_prompt(request, conversation_context)
         
         # Prepare Ollama request (non-streaming)
         ollama_request = {
@@ -339,7 +346,8 @@ class LlamaCppEngine(LLMEngine):
     
     async def generate_stream(
         self, 
-        request: GenerationRequest
+        request: GenerationRequest,
+        conversation_context: str = ""
     ) -> AsyncGenerator[StreamToken, None]:
         """Generate streaming response via llama.cpp"""
         # TODO: Implement llama.cpp streaming
@@ -349,7 +357,7 @@ class LlamaCppEngine(LLMEngine):
             metadata={"error": True}
         )
     
-    async def generate(self, request: GenerationRequest) -> GenerationResult:
+    async def generate(self, request: GenerationRequest, conversation_context: str = "") -> GenerationResult:
         """Generate complete response via llama.cpp"""
         # TODO: Implement llama.cpp generation
         raise NotImplementedError("LlamaCppEngine not yet implemented")
@@ -438,12 +446,13 @@ class LLMService:
         self,
         query: str,
         retrieval_result: Optional[RetrievalResult] = None,
+        conversation_context: str = "",
         **kwargs
     ) -> GenerationResult:
         """Generate complete response"""
         if not self.engine:
             raise RuntimeError("LLM service not initialized")
-        
+
         request = GenerationRequest(
             prompt=query,
             retrieval_result=retrieval_result,
@@ -452,7 +461,29 @@ class LLMService:
             include_citations=kwargs.get('include_citations', True)
         )
         
-        return await self.engine.generate(request)
+        return await self.engine.generate(request, conversation_context)
+
+    async def generate_stream(
+        self,
+        query: str,
+        retrieval_result: Optional[RetrievalResult] = None,
+        conversation_context: str = "",
+        **kwargs
+    ) -> AsyncGenerator[StreamToken, None]:
+        """Generate streaming response"""
+        if not self.engine:
+            raise RuntimeError("LLM service not initialized")
+
+        request = GenerationRequest(
+            prompt=query,
+            retrieval_result=retrieval_result,
+            config=self.config,
+            stream=True,
+            include_citations=kwargs.get('include_citations', True)
+        )
+        
+        async for token in self.engine.generate_stream(request, conversation_context):
+            yield token
     
     async def health_check(self) -> Dict[str, Any]:
         """Check service health"""

@@ -13,8 +13,13 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-export function formatTimestamp(timestamp: string): string {
-  return new Date(timestamp).toLocaleString()
+export function formatTimestamp(timestamp: string | null | undefined): string {
+  if (!timestamp) return 'No date'
+  try {
+    return new Date(timestamp).toLocaleString()
+  } catch (error) {
+    return 'Invalid date'
+  }
 }
 
 export function truncateText(text: string, maxLength: number): string {

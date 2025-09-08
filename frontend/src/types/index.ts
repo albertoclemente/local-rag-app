@@ -3,12 +3,21 @@ export interface Document {
   filename: string
   title?: string
   size: number
-  upload_date: string
+  upload_date: string  // Maps to backend addedAt
   file_type: string
   chunk_count?: number
   indexed: boolean
   tags: string[]
   metadata: Record<string, any>
+  // Backend fields for compatibility
+  name?: string
+  sizeBytes?: number
+  addedAt?: string
+  lastIndexed?: string | null
+  status?: string
+  embedding_status?: string
+  type?: string
+  chunkCount?: number
 }
 
 export interface DocumentUploadRequest {
@@ -43,12 +52,19 @@ export interface Citation {
 
 export interface QueryRequest {
   query: string
+  sessionId?: string
   k?: number
   doc_filter?: string[]
   min_score?: number
 }
 
 export interface QueryResponse {
+  sessionId: string
+  turnId: string
+  message?: string
+}
+
+export interface StreamingQueryResponse {
   answer: string
   chunks: ChunkResult[]
   citations: Citation[]

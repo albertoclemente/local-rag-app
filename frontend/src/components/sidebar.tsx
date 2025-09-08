@@ -175,12 +175,12 @@ function DocumentItem({ document }: DocumentItemProps) {
           <div className="flex items-center space-x-2">
             <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
             <span className="text-sm font-medium text-gray-900 truncate">
-              {document.title || document.filename}
+              {document.title || document.filename || document.name}
             </span>
           </div>
           
           <div className="mt-1 text-xs text-gray-500">
-            {formatFileSize(document.size)} • {formatTimestamp(document.upload_date)}
+            {formatFileSize(document.sizeBytes || document.size)} • {formatTimestamp(document.addedAt || document.upload_date)}
           </div>
           
           {document.tags.length > 0 && (
@@ -204,14 +204,14 @@ function DocumentItem({ document }: DocumentItemProps) {
           <div className="mt-1 flex items-center space-x-2">
             <div className={cn(
               'w-2 h-2 rounded-full',
-              document.indexed ? 'bg-green-500' : 'bg-yellow-500'
+              (document.indexed || document.status === 'indexed') ? 'bg-green-500' : 'bg-yellow-500'
             )} />
             <span className="text-xs text-gray-500">
-              {document.indexed ? 'Indexed' : 'Processing...'}
+              {(document.indexed || document.status === 'indexed') ? 'Indexed' : 'Processing...'}
             </span>
-            {document.chunk_count && (
+            {(document.chunk_count || document.chunkCount) && (
               <span className="text-xs text-gray-400">
-                • {document.chunk_count} chunks
+                • {document.chunk_count || document.chunkCount} chunks
               </span>
             )}
           </div>

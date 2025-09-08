@@ -4,12 +4,14 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, User, Bot } from 'lucide-react'
 import { useSubmitQuery } from '@/hooks/api'
 import { cn } from '@/lib/utils'
-import type { ChatMessage, QueryResponse, Citation } from '@/types'
+import type { ChatMessage, StreamingQueryResponse, Citation } from '@/types'
 
 export function ChatView() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
@@ -35,12 +37,24 @@ export function ChatView() {
     }
 
     setMessages(prev => [...prev, userMessage])
+    const queryText = input.trim()
     setInput('')
     setIsStreaming(true)
+    setStreamingContent('')
 
     try {
       const response = await submitQuery.mutateAsync({
-        query: input.trim()
+        query: queryText,
+        sessionId: sessionId,
+        onStreamingStart: () => {
+          console.log('🚀 Streaming started')
+        },
+        onStreamToken: (token: string) => {
+          setStreamingContent(prev => prev + token)
+        },
+        onStreamingEnd: () => {
+          console.log('✅ Streaming ended')
+        }
       })
 
       const assistantMessage: ChatMessage = {
@@ -63,6 +77,7 @@ export function ChatView() {
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsStreaming(false)
+      setStreamingContent('')
     }
   }
 
@@ -110,10 +125,21 @@ export function ChatView() {
                 </div>
                 <div className="flex-1">
                   <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                      <span className="text-sm text-gray-600">Thinking...</span>
-                    </div>
+                    {streamingContent ? (
+                      <div className="prose prose-sm max-w-none">
+                        {streamingContent.split('\n').map((line, index) => (
+                          <p key={index} className="mb-2 last:mb-0 text-gray-900">
+                            {line}
+                          </p>
+                        ))}
+                        <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse ml-1" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        <span className="text-sm text-gray-600">Thinking...</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -190,7 +216,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
             : 'bg-white border border-gray-200'
         )}>
           <div className="prose prose-sm max-w-none">
-            {message.content.split('\n').map((line, index) => (
+            {(message.content || '').split('\n').map((line, index) => (
               <p key={index} className={cn(
                 'mb-2 last:mb-0',
                 isUser ? 'text-white' : 'text-gray-900'

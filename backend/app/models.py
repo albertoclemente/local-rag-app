@@ -255,7 +255,7 @@ class SystemStatus(BaseModel):
     cpu_usage: Optional[float] = None
     ram_usage: Optional[float] = None
     indexing_progress: Optional[Dict[str, Any]] = None
-    offline: bool = True
+    offline: bool = False  # Changed default to False for local operation
 
 
 class ErrorResponse(BaseModel):
