@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Force black text for chat messages */
+.prose p,
+.prose div,
+[class*="text-black"],
+[style*="color: #000000"],
+[style*="color: rgb(0, 0, 0)"] {
+  color: #000000 !important;
+}
+
+/* Ensure chat container text is black */
+.chat-message,
+.chat-content,
+.message-content {
+  color: #000000 !important;
+}
