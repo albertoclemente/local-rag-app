@@ -128,16 +128,33 @@ When answering:
 1. Use only the information from the provided context
 2. Be accurate and concise
 3. If the context doesn't contain enough information, say so
-4. When referencing information, clearly identify which document it comes from
-5. Provide a clear, well-structured response
-6. If there is previous conversation context, use it to understand references like "it", "they", "this", etc.
+4. Provide a clear, well-structured response using proper markdown formatting
+5. If there is previous conversation context, use it to understand references like "it", "they", "this", etc.
+
+FORMATTING REQUIREMENTS:
+- Use proper markdown formatting in all responses
+- Use **bold** for emphasis and important terms
+- Use bullet points with - or * for lists
+- Use numbered lists when appropriate (1., 2., 3.)
+- Use ## for section headers when organizing long responses
+- Use `code` formatting for technical terms, filenames, or code snippets
+- Use > for quotes or important callouts when relevant
+
+MATHEMATICAL NOTATION:
+- Use LaTeX notation for mathematical expressions
+- For inline math, use single dollar signs: $P_{11} = 0.7$
+- For display math (block equations), use double dollar signs: $$P = \begin{pmatrix} 0.7 & 0.3 \\ 0.4 & 0.6 \end{pmatrix}$$
+- Use proper LaTeX syntax for matrices, fractions, subscripts, superscripts, etc.
+- Mathematical expressions will be rendered beautifully with KaTeX
 
 CRITICAL: When asked "how many documents do you have as context?":
 - Count ONLY the actual uploaded PDF/document files in the system
 - DO NOT count academic references, citations, or bibliography entries within documents
 - DO NOT count individual papers mentioned in reference lists
 - A single PDF containing 100 citations still counts as 1 document
-- Answer with the exact number of source files uploaded to the system"""
+- Answer with the exact number of source files uploaded to the system
+
+IMPORTANT: Do not include chunk references, citations, or source numbers in your responses. Simply answer based on the provided information without referencing specific chunks or document sections."""
         
         prompt_parts.append(f"System: {system_prompt}\n")
         
@@ -193,11 +210,11 @@ CRITICAL: When asked "how many documents do you have as context?":
             # If all chunks are from the same document, present it more clearly
             if len(chunks_by_doc) == 1:
                 doc_name, chunks = next(iter(chunks_by_doc.items()))
-                prompt_parts.append(f"\n=== UPLOADED DOCUMENT #1: \"{doc_name}\" ===\n")
-                prompt_parts.append(f"This is 1 (ONE) uploaded document file containing {len(chunks)} chunks of content:\n\n")
+                prompt_parts.append(f"\n=== SOURCE DOCUMENT: \"{doc_name}\" ===\n")
+                prompt_parts.append(f"This is 1 (ONE) uploaded document file containing relevant content:\n\n")
                 
-                for i, chunk in enumerate(chunks, 1):
-                    prompt_parts.append(f"[Chunk {i}] {chunk.text}\n\n")
+                for chunk in chunks:
+                    prompt_parts.append(f"{chunk.text}\n\n")
                 
                 prompt_parts.append(f"DOCUMENT COUNT CLARIFICATION:\n")
                 prompt_parts.append(f"- Uploaded document files: 1\n")
@@ -209,10 +226,10 @@ CRITICAL: When asked "how many documents do you have as context?":
                 
                 for doc_num, (doc_name, chunks) in enumerate(chunks_by_doc.items(), 1):
                     prompt_parts.append(f"\n=== UPLOADED DOCUMENT #{doc_num}: \"{doc_name}\" ===\n")
-                    prompt_parts.append(f"Document file #{doc_num} contains {len(chunks)} chunks:\n")
+                    prompt_parts.append(f"Document file #{doc_num} relevant content:\n\n")
                     
-                    for i, chunk in enumerate(chunks, 1):
-                        prompt_parts.append(f"[Doc {doc_num}, Chunk {i}] {chunk.text}\n\n")
+                    for chunk in chunks:
+                        prompt_parts.append(f"{chunk.text}\n\n")
                 
                 prompt_parts.append(f"DOCUMENT COUNT CLARIFICATION:\n")
                 prompt_parts.append(f"- Total uploaded document files: {len(chunks_by_doc)}\n")

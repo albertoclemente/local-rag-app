@@ -4,6 +4,11 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, User, Bot } from 'lucide-react'
 import { useSubmitQuery } from '@/hooks/api'
 import { cn } from '@/lib/utils'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import type { ChatMessage, StreamingQueryResponse, Citation } from '@/types'
 
 export function ChatView() {
@@ -103,7 +108,7 @@ export function ChatView() {
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Bot className="h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-lg font-medium mb-2" style={{ color: '#000000' }}>
               Welcome to Local RAG
             </h3>
             <p className="text-gray-500 max-w-md">
@@ -126,12 +131,25 @@ export function ChatView() {
                 <div className="flex-1">
                   <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
                     {streamingContent ? (
-                      <div className="prose prose-sm max-w-none">
-                        {streamingContent.split('\n').map((line, index) => (
-                          <p key={index} className="mb-2 last:mb-0 text-gray-900">
-                            {line}
-                          </p>
-                        ))}
+                      <div className="prose prose-sm max-w-none text-black">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0 text-black">{children}</p>,
+                            strong: ({ children }) => <strong className="font-bold text-black">{children}</strong>,
+                            ul: ({ children }) => <ul className="list-disc pl-4 mb-2 text-black">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 text-black">{children}</ol>,
+                            li: ({ children }) => <li className="mb-1 text-black">{children}</li>,
+                            h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-black">{children}</h1>,
+                            h2: ({ children }) => <h2 className="text-lg font-bold mb-2 text-black">{children}</h2>,
+                            h3: ({ children }) => <h3 className="text-base font-bold mb-2 text-black">{children}</h3>,
+                            code: ({ children }) => <code className="bg-gray-100 px-1 rounded text-black font-mono text-sm">{children}</code>,
+                            blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700">{children}</blockquote>
+                          }}
+                        >
+                          {streamingContent}
+                        </ReactMarkdown>
                         <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse ml-1" />
                       </div>
                     ) : (
@@ -161,6 +179,7 @@ export function ChatView() {
               placeholder="Ask a question about your documents..."
               rows={1}
               className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32"
+              style={{ color: '#000000' }}
               disabled={submitQuery.isPending}
             />
           </div>
@@ -216,34 +235,40 @@ function MessageBubble({ message }: MessageBubbleProps) {
             : 'bg-white border border-gray-200'
         )}>
           <div className="prose prose-sm max-w-none">
-            {(message.content || '').split('\n').map((line, index) => (
-              <p key={index} className={cn(
-                'mb-2 last:mb-0',
-                isUser ? 'text-white' : 'text-gray-900'
-              )}>
-                {line}
-              </p>
-            ))}
-          </div>
-
-          {/* Citations */}
-          {message.citations && message.citations.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <div className="text-xs text-gray-500 mb-2">Sources:</div>
-              <div className="flex flex-wrap gap-1">
-                {message.citations.map((citation, index) => (
-                  <button
-                    key={index}
-                    className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200 transition-colors"
-                    title={citation.content_preview}
-                  >
-                    [{index + 1}] {citation.doc_title}
-                    {citation.page_number && ` (p.${citation.page_number})`}
-                  </button>
-                ))}
+            {isUser ? (
+              // For user messages, keep simple text formatting
+              (message.content || '').split('\n').map((line, index) => (
+                <p key={index} className={cn(
+                  'mb-2 last:mb-0',
+                  'text-white !text-white'
+                )} style={{ color: 'white' }}>
+                  {line}
+                </p>
+              ))
+            ) : (
+              // For assistant messages, render markdown
+              <div className="text-black">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={{
+                    p: ({ children }) => <p className="mb-2 last:mb-0 text-black">{children}</p>,
+                    strong: ({ children }) => <strong className="font-bold text-black">{children}</strong>,
+                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2 text-black">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 text-black">{children}</ol>,
+                    li: ({ children }) => <li className="mb-1 text-black">{children}</li>,
+                    h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-black">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-lg font-bold mb-2 text-black">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-base font-bold mb-2 text-black">{children}</h3>,
+                    code: ({ children }) => <code className="bg-gray-100 px-1 rounded text-black font-mono text-sm">{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700">{children}</blockquote>
+                  }}
+                >
+                  {message.content || ''}
+                </ReactMarkdown>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Timestamp */}
