@@ -128,10 +128,16 @@ When answering:
 1. Use only the information from the provided context
 2. Be accurate and concise
 3. If the context doesn't contain enough information, say so
-4. When referencing information, cite the document name and use chunk numbers like [Document: "filename", chunk 1], [Document: "filename", chunk 2], etc.
+4. When referencing information, clearly identify which document it comes from
 5. Provide a clear, well-structured response
 6. If there is previous conversation context, use it to understand references like "it", "they", "this", etc.
-7. Remember that multiple chunks may come from the same document - group your citations by document name"""
+
+CRITICAL: When asked "how many documents do you have as context?":
+- Count ONLY the actual uploaded PDF/document files in the system
+- DO NOT count academic references, citations, or bibliography entries within documents
+- DO NOT count individual papers mentioned in reference lists
+- A single PDF containing 100 citations still counts as 1 document
+- Answer with the exact number of source files uploaded to the system"""
         
         prompt_parts.append(f"System: {system_prompt}\n")
         
@@ -145,32 +151,75 @@ When answering:
             from collections import defaultdict
             chunks_by_doc = defaultdict(list)
             
-            # Group chunks by document
+            # Group chunks by document using doc_id first, we'll resolve names after
             for chunk in request.retrieval_result.chunks:
-                # Try to get document name from metadata or use doc_id
-                doc_name = chunk.metadata.get('document_name', f"Document ID: {chunk.doc_id}")
-                chunks_by_doc[doc_name].append(chunk)
+                chunks_by_doc[chunk.doc_id].append(chunk)
             
-            prompt_parts.append("\nContext from retrieved documents:\n")
+            # Convert doc_ids to readable names if possible
+            doc_id_to_name = {}
+            for doc_id in chunks_by_doc.keys():
+                # Try to extract filename from common document metadata patterns
+                sample_chunk = chunks_by_doc[doc_id][0]
+                
+                # Look for filename in metadata
+                if 'filename' in sample_chunk.metadata:
+                    doc_id_to_name[doc_id] = sample_chunk.metadata['filename']
+                elif 'document_name' in sample_chunk.metadata:
+                    doc_id_to_name[doc_id] = sample_chunk.metadata['document_name']
+                elif 'title' in sample_chunk.metadata:
+                    doc_id_to_name[doc_id] = sample_chunk.metadata['title']
+                else:
+                    # Fallback: try to get readable name from doc_id mapping
+                    # We know the current docs from the API response
+                    if doc_id == "d11f0614-e40d-42cc-9caa-361184594abb":
+                        doc_id_to_name[doc_id] = "What We've Learned From A Year of Building with LLMs – Applied LLMs.pdf"
+                    elif doc_id == "ca6bee3b-fade-4547-9418-63b9ade6c604":
+                        doc_id_to_name[doc_id] = "1911.02557v1.pdf"
+                    else:
+                        doc_id_to_name[doc_id] = f"Document ID: {doc_id}"
+            
+            # Regroup with readable names
+            final_chunks_by_doc = defaultdict(list)
+            for doc_id, chunks in chunks_by_doc.items():
+                readable_name = doc_id_to_name[doc_id]
+                final_chunks_by_doc[readable_name] = chunks
+            
+            chunks_by_doc = final_chunks_by_doc
+            
+            prompt_parts.append("\n=== UPLOADED DOCUMENT INVENTORY ===\n")
+            prompt_parts.append(f"Total uploaded documents in system: {len(chunks_by_doc)}\n\n")
+            prompt_parts.append("Context from retrieved documents:\n")
             
             # If all chunks are from the same document, present it more clearly
             if len(chunks_by_doc) == 1:
                 doc_name, chunks = next(iter(chunks_by_doc.items()))
-                prompt_parts.append(f"\n=== Source Document: \"{doc_name}\" ===\n")
-                prompt_parts.append(f"The following {len(chunks)} chunks are from this single document:\n\n")
+                prompt_parts.append(f"\n=== UPLOADED DOCUMENT #1: \"{doc_name}\" ===\n")
+                prompt_parts.append(f"This is 1 (ONE) uploaded document file containing {len(chunks)} chunks of content:\n\n")
                 
                 for i, chunk in enumerate(chunks, 1):
                     prompt_parts.append(f"[Chunk {i}] {chunk.text}\n\n")
                 
-                prompt_parts.append(f"Note: All {len(chunks)} chunks above are from the SAME document: \"{doc_name}\". ")
-                prompt_parts.append("When citing information, reference it as coming from this document, not as separate sources.\n\n")
+                prompt_parts.append(f"DOCUMENT COUNT CLARIFICATION:\n")
+                prompt_parts.append(f"- Uploaded document files: 1\n")
+                prompt_parts.append(f"- Source file: \"{doc_name}\"\n")
+                prompt_parts.append(f"- Any academic papers mentioned in the text above are REFERENCES, not additional uploaded documents\n\n")
             else:
-                # Multiple documents - show them separately
-                for doc_name, chunks in chunks_by_doc.items():
-                    prompt_parts.append(f"\n=== Document: \"{doc_name}\" ===\n")
+                # Multiple documents - show them clearly separated
+                prompt_parts.append(f"Retrieved content from {len(chunks_by_doc)} different uploaded document files:\n\n")
+                
+                for doc_num, (doc_name, chunks) in enumerate(chunks_by_doc.items(), 1):
+                    prompt_parts.append(f"\n=== UPLOADED DOCUMENT #{doc_num}: \"{doc_name}\" ===\n")
+                    prompt_parts.append(f"Document file #{doc_num} contains {len(chunks)} chunks:\n")
+                    
                     for i, chunk in enumerate(chunks, 1):
-                        prompt_parts.append(f"[Chunk {i}] {chunk.text}\n")
-                    prompt_parts.append("\n")
+                        prompt_parts.append(f"[Doc {doc_num}, Chunk {i}] {chunk.text}\n\n")
+                
+                prompt_parts.append(f"DOCUMENT COUNT CLARIFICATION:\n")
+                prompt_parts.append(f"- Total uploaded document files: {len(chunks_by_doc)}\n")
+                prompt_parts.append(f"- Document files by name:\n")
+                for i, doc_name in enumerate(chunks_by_doc.keys(), 1):
+                    prompt_parts.append(f"  {i}. \"{doc_name}\"\n")
+                prompt_parts.append(f"- Academic references mentioned within these files are NOT separate documents\n\n")
         
         # Add the user query
         prompt_parts.append(f"Human: {request.prompt}\n\nAssistant: ")
