@@ -128,9 +128,10 @@ When answering:
 1. Use only the information from the provided context
 2. Be accurate and concise
 3. If the context doesn't contain enough information, say so
-4. Include citation numbers [1], [2], etc. when referencing specific sources
+4. When referencing information, cite the document name and use chunk numbers like [Document: "filename", chunk 1], [Document: "filename", chunk 2], etc.
 5. Provide a clear, well-structured response
-6. If there is previous conversation context, use it to understand references like "it", "they", "this", etc."""
+6. If there is previous conversation context, use it to understand references like "it", "they", "this", etc.
+7. Remember that multiple chunks may come from the same document - group your citations by document name"""
         
         prompt_parts.append(f"System: {system_prompt}\n")
         
@@ -140,11 +141,36 @@ When answering:
         
         # Add retrieved context if available
         if request.retrieval_result and request.retrieval_result.chunks:
-            prompt_parts.append("\nContext:\n")
-            for i, chunk in enumerate(request.retrieval_result.chunks, 1):
-                citation = f"[{i}]"
-                prompt_parts.append(f"{citation} {chunk.text}\n")
-            prompt_parts.append("\n")
+            # Group chunks by document
+            from collections import defaultdict
+            chunks_by_doc = defaultdict(list)
+            
+            # Group chunks by document
+            for chunk in request.retrieval_result.chunks:
+                # Try to get document name from metadata or use doc_id
+                doc_name = chunk.metadata.get('document_name', f"Document ID: {chunk.doc_id}")
+                chunks_by_doc[doc_name].append(chunk)
+            
+            prompt_parts.append("\nContext from retrieved documents:\n")
+            
+            # If all chunks are from the same document, present it more clearly
+            if len(chunks_by_doc) == 1:
+                doc_name, chunks = next(iter(chunks_by_doc.items()))
+                prompt_parts.append(f"\n=== Source Document: \"{doc_name}\" ===\n")
+                prompt_parts.append(f"The following {len(chunks)} chunks are from this single document:\n\n")
+                
+                for i, chunk in enumerate(chunks, 1):
+                    prompt_parts.append(f"[Chunk {i}] {chunk.text}\n\n")
+                
+                prompt_parts.append(f"Note: All {len(chunks)} chunks above are from the SAME document: \"{doc_name}\". ")
+                prompt_parts.append("When citing information, reference it as coming from this document, not as separate sources.\n\n")
+            else:
+                # Multiple documents - show them separately
+                for doc_name, chunks in chunks_by_doc.items():
+                    prompt_parts.append(f"\n=== Document: \"{doc_name}\" ===\n")
+                    for i, chunk in enumerate(chunks, 1):
+                        prompt_parts.append(f"[Chunk {i}] {chunk.text}\n")
+                    prompt_parts.append("\n")
         
         # Add the user query
         prompt_parts.append(f"Human: {request.prompt}\n\nAssistant: ")

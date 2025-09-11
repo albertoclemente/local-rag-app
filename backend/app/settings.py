@@ -51,9 +51,11 @@ class Settings(BaseSettings):
     # Security
     encryption_key: Optional[str] = Field(default=None, env="RAG_ENCRYPTION_KEY")
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore"  # Allow extra environment variables
+    }
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

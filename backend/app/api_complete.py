@@ -153,7 +153,11 @@ async def upload_document(
                     # Update document status to include embeddings
                     await storage.update_document_metadata(
                         document.id, 
-                        {"status": "indexed", "embedding_status": "indexed"}
+                        {
+                            "status": "indexed", 
+                            "embedding_status": "indexed",
+                            "chunk_count": len(chunked_doc.chunks)
+                        }
                     )
                     logger.info(f"Embeddings created successfully for document {document.id}")
                     
@@ -162,7 +166,11 @@ async def upload_document(
                     # Document is still chunked, just not embedded
                     await storage.update_document_metadata(
                         document.id, 
-                        {"status": "indexed", "embedding_status": "error"}
+                        {
+                            "status": "indexed", 
+                            "embedding_status": "error",
+                            "chunk_count": len(chunked_doc.chunks)
+                        }
                     )
                 
                 document.status = "indexed"  # type: ignore
@@ -349,7 +357,10 @@ async def reindex_document(
                 
                 parsed_data["chunking"] = chunk_data
                 await storage.store_parsed_content(doc_id, parsed_data)
-                await storage.update_document_metadata(doc_id, {"status": "indexed"})
+                await storage.update_document_metadata(doc_id, {
+                    "status": "indexed",
+                    "chunk_count": len(chunked_doc.chunks)
+                })
                 
                 logger.info(
                     f"Document reindexed: {doc_id} "
