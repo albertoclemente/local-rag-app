@@ -141,26 +141,18 @@ Notes:
 - Requires Docker, Python, Node, and (ideally) Ollama installed.
 - Press Ctrl+C in the terminal to stop both backend and frontend.
 
-## 🐳 Docker-only (backend + Qdrant)
+## 🐳 Docker (Frontend + Backend + Qdrant)
 
-Use Docker Compose to run Qdrant and the Backend together. Useful when you want to keep the backend containerized and run the frontend locally, without opening VS Code.
+Run everything in Docker for a one-command start.
 
 ```bash
-chmod +x scripts/docker_full_up.sh
-./scripts/docker_full_up.sh
+docker compose -f docker/docker-compose.yml --profile full up -d
 ```
 
-This runs the compose profile defined in `docker/docker-compose.yml`:
-- Qdrant: http://localhost:6333
+Services
+- Frontend: http://localhost:3000
 - Backend: http://localhost:8000
-
-Then run the frontend locally:
-
-```bash
-cd frontend
-npm install
-npm run dev   # http://localhost:3000
-```
+- Qdrant: http://localhost:6333
 
 Notes
 - Ollama runs on your host at `http://localhost:11434`. Make sure it’s serving and a model is pulled:
