@@ -13,10 +13,12 @@ A completely local Retrieval-Augmented Generation (RAG) web app for document Q&A
 - Modern UI: Next.js (React + TypeScript)
 
 ## � Simple Start (No Git Needed)
+## Simple Start (No Git Needed — for non‑experts)
 
+If you're not familiar with Git, use this section. It's the easiest path for non‑experts on macOS. You can skip the Git-based "Quick Start" below.
 This is the easiest path for non‑experts on macOS.
 
-1) Install these apps
+For developers comfortable with Git and the command line. Please note that this section assumes familiarity with Git commands and the terminal.
 - Docker Desktop: https://www.docker.com/products/docker-desktop/
 - Ollama (Local LLM): https://ollama.ai/
 - Node.js 18+ (LTS): https://nodejs.org/ or `brew install node`
