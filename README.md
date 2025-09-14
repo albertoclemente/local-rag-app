@@ -15,7 +15,7 @@ A completely local Retrieval-Augmented Generation (RAG) web app for document Q&A
 ## � Simple Start (No Git Needed)
 ## Simple Start (No Git Needed — for non‑experts)
 
-If you're not familiar with Git, use this section. It's the easiest path for non‑experts on macOS. You can skip the Git-based "Quick Start" below.
+No Git required: download the ZIP and run the one‑command script.
 This is the easiest path for non‑experts on macOS.
 
 For developers comfortable with Git and the command line. Please note that this section assumes familiarity with Git commands and the terminal.
