@@ -291,6 +291,14 @@ vectors/
 *.md
 *.epub
 
+# Ignore most Markdown docs in repo, but keep READMEs
+**/*.md
+!**/README.md
+
+# Test coverage reports
+htmlcov/
+**/htmlcov/**
+
 # Tests and debug helpers (exclude from pushes)
 tests/
 **/tests/**
