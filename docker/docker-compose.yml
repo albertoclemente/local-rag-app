@@ -32,6 +32,8 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - RAG_DATA_DIR=/app/data
       - RAG_PROFILE=balanced
+      # Use host.docker.internal to reach host's Ollama (macOS/Windows). On Linux, set to http://host.docker.internal:11434 and ensure gateway mapping or expose Ollama.
+      - OLLAMA_HOST=http://host.docker.internal:11434
     volumes:
       - backend_data:/app/data
       - ../backend:/app

@@ -143,7 +143,7 @@ Notes:
 
 ## 🐳 Docker-only (backend + Qdrant)
 
-Use Docker Compose to run Qdrant and the Backend together. Useful when you want to keep the backend containerized and run the frontend locally.
+Use Docker Compose to run Qdrant and the Backend together. Useful when you want to keep the backend containerized and run the frontend locally, without opening VS Code.
 
 ```bash
 chmod +x scripts/docker_full_up.sh
@@ -161,6 +161,14 @@ cd frontend
 npm install
 npm run dev   # http://localhost:3000
 ```
+
+Notes
+- Ollama runs on your host at `http://localhost:11434`. Make sure it’s serving and a model is pulled:
+```bash
+ollama serve &
+ollama pull qwen2.5:7b-instruct
+```
+- On macOS/Windows, containers reach your host via `host.docker.internal` (preconfigured). On Linux, you may need to map the host gateway or expose Ollama differently.
 
 ## 🧭 How To Use
 
