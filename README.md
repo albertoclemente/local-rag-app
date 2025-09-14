@@ -149,6 +149,13 @@ Run everything in Docker for a one-command start.
 docker compose -f docker/docker-compose.yml --profile full up -d
 ```
 
+Or use the helper that builds, starts, waits, and opens your browser automatically (macOS):
+
+```bash
+chmod +x scripts/docker_up_and_open.sh
+./scripts/docker_up_and_open.sh
+```
+
 Services
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
