@@ -262,3 +262,20 @@ models/
 
 # Evaluation data
 eval/
+
+# Local app data (uploads, parsed text, indices)
+# Default data dir is ~/RAGApp; also ignore common local fallback dirs
+library/
+data/
+uploads/
+parsed/
+indices/
+backend_data/
+qdrant_data/
+
+# Uploaded files in repo root (just in case)
+*.pdf
+*.docx
+*.txt
+*.md
+*.epub
