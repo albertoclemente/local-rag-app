@@ -279,3 +279,12 @@ qdrant_data/
 *.txt
 *.md
 *.epub
+
+# Tests and debug helpers (exclude from pushes)
+tests/
+**/tests/**
+test_*.py
+*_test.py
+test_*.sh
+debug_*.py
+*.coverage

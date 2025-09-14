@@ -1,1 +1,0 @@
-Testing DocumentType enum conversion fix.

@@ -1,1 +1,0 @@
-Testing complete embedding pipeline with local models.
