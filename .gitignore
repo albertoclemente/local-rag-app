@@ -307,3 +307,17 @@ test_*.py
 test_*.sh
 debug_*.py
 *.coverage
+
+# Local helper/maintenance scripts (do not push)
+definitive_reset.py
+final_reset.py
+nuclear_reset.py
+radical_reset.py
+ultimate_reset.py
+reset_qdrant.py
+simple_test_*.py
+manage_backend.py
+backend/verify_section7.py
+backend/app/api_old.py
+backend/app/api_simple.py
+backend/app/api_new.py
