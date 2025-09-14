@@ -457,8 +457,9 @@ async def get_system_status() -> SystemStatus:
         # Get health status from each service
         llm_health = {}
         try:
-            qdrant_health = await qdrant_service.health_check()
-            llm_health = await llm_service.health_check()
+            import asyncio
+            qdrant_health = await asyncio.wait_for(qdrant_service.health_check(), timeout=2.0)
+            llm_health = await asyncio.wait_for(llm_service.health_check(), timeout=2.0)
             services_healthy = qdrant_health.get("healthy", True) and llm_health.get("healthy", True)
         except Exception as e:
             logger.warning(f"Service health check failed: {e}")
@@ -479,13 +480,18 @@ async def get_system_status() -> SystemStatus:
         ram_usage_bytes = int(mem.get("rss_bytes") or 0)
 
         # Determine model name if available from health payload
-        model_name = None
+        # Start with configured model name to avoid blocking on network
+        try:
+            model_name = getattr(llm_service, 'config', None).model_name if getattr(llm_service, 'config', None) else None
+        except Exception:
+            model_name = None
         try:
             if isinstance(llm_health, dict):
                 model_name = (
                     llm_health.get("model")
                     or (llm_health.get("model_info") or {}).get("model")
                     or (llm_health.get("model_info") or {}).get("name")
+                    or model_name
                 )
         except Exception as e:
             logger.warning(f"Failed to extract LLM model name: {e}")

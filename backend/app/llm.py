@@ -171,6 +171,22 @@ IMPORTANT: Do not include chunk references, citations, or source numbers in your
             logger.warning(f"Failed to list uploaded documents: {e}")
             uploaded_docs = []
 
+        # Build a quick lookup from doc_id -> display name
+        doc_id_to_display_name = {}
+        try:
+            for doc in uploaded_docs:
+                doc_id = getattr(doc, "id", None)
+                # Prefer explicit name fields; fallback to filename-like fields
+                display_name = (
+                    getattr(doc, "name", None)
+                    or getattr(doc, "filename", None)
+                    or getattr(doc, "title", None)
+                )
+                if doc_id and display_name:
+                    doc_id_to_display_name[doc_id] = display_name
+        except Exception as e:
+            logger.warning(f"Failed to build document name map: {e}")
+
         prompt_parts.append("\n=== UPLOADED DOCUMENT INVENTORY ===\n")
         prompt_parts.append(f"Total uploaded documents in system: {len(uploaded_docs)}\n")
         if uploaded_docs:
@@ -201,15 +217,14 @@ IMPORTANT: Do not include chunk references, citations, or source numbers in your
                     doc_id_to_name[doc_id] = sample_chunk.metadata['filename']
                 elif 'document_name' in sample_chunk.metadata:
                     doc_id_to_name[doc_id] = sample_chunk.metadata['document_name']
+                elif 'name' in sample_chunk.metadata:
+                    doc_id_to_name[doc_id] = sample_chunk.metadata['name']
                 elif 'title' in sample_chunk.metadata:
                     doc_id_to_name[doc_id] = sample_chunk.metadata['title']
                 else:
-                    # Fallback: try to get readable name from doc_id mapping
-                    # We know the current docs from the API response
-                    if doc_id == "d11f0614-e40d-42cc-9caa-361184594abb":
-                        doc_id_to_name[doc_id] = "What We've Learned From A Year of Building with LLMs – Applied LLMs.pdf"
-                    elif doc_id == "ca6bee3b-fade-4547-9418-63b9ade6c604":
-                        doc_id_to_name[doc_id] = "1911.02557v1.pdf"
+                    # Fallback: use uploaded document inventory mapping
+                    if doc_id in doc_id_to_display_name:
+                        doc_id_to_name[doc_id] = doc_id_to_display_name[doc_id]
                     else:
                         doc_id_to_name[doc_id] = f"Document ID: {doc_id}"
             
