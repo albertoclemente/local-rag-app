@@ -1,55 +1,55 @@
 # Local RAG WebApp
 
-A **completely local** Retrieval-Augmented Generation (RAG) web application for document Q&A. Upload your documents, ask questions, and get accurate answers—all without any cloud dependencies.
+A completely local Retrieval-Augmented Generation (RAG) web app for document Q&A. Upload your documents, ask questions, and get accurate, properly formatted answers — no cloud required.
 
 ## ✨ Features
 
-- **🔒 100% Local**: No cloud APIs, no data leaves your machine
-- **📄 Multi-format Support**: PDF, DOCX, TXT, MD, EPUB documents
-- **🧠 Intelligent Processing**: Adaptive chunking and dynamic-k retrieval
-- **⚡ Real-time Streaming**: Live token streaming with animated indicators
-- **🎯 Accurate Citations**: See exactly which documents informed each answer
-- **🔧 Performance Profiles**: Eco/Balanced/Performance modes for your hardware
-- **🎨 Modern UI**: React + TypeScript frontend with accessibility support
+- 100% local: data never leaves your machine
+- Multi-format: PDF, DOCX, TXT, MD, EPUB
+- Smart RAG: adaptive chunking + dynamic-k retrieval
+- Streaming replies: live token streaming over WebSocket
+- Sources panel: see which documents informed each answer
+- Profiles: Eco / Balanced / Performance
+- Modern UI: Next.js (React + TypeScript)
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- **Python 3.9+**
-- **Node.js 18+** 
-- **Docker** (for Qdrant vector database)
-- **Ollama** (for local LLM) - [Install here](https://ollama.ai/)
+- Python 3.9+
+- Node.js 18+
+- Docker (for Qdrant)
+- Ollama (local LLM): https://ollama.ai/
 
-### 1. Clone and Setup
+### 1) Clone
 
 ```bash
 git clone <repository-url>
 cd RAG_APP
 ```
 
-### 2. Start Vector Database
+### 2) Start vector database (Qdrant)
 
 ```bash
-cd docker
-docker-compose up qdrant -d
+docker compose -f docker/docker-compose.yml up -d qdrant
 ```
 
-### 3. Setup Backend
+### 3) Backend
 
 ```bash
 cd backend
 pip install -e .
 
-# Start Ollama and pull a model
+# Start Ollama and pull a model (choose one)
 ollama serve &
-ollama pull llama3.2:3b
+ollama pull qwen2.5:7b-instruct   # default here
+# or: ollama pull llama3.1:8b
 
-# Start the backend
-python -m app.main
+# Start FastAPI (reload for dev)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 4. Setup Frontend
+### 4) Frontend
 
 ```bash
 cd frontend
@@ -57,90 +57,71 @@ npm install
 npm run dev
 ```
 
-### 5. Access the Application
+### 5) Open the app
 
-Open your browser to **http://localhost:5173** (Vite dev server) or **http://localhost:8000** (production build).
+- UI: http://localhost:3000
+- API: http://localhost:8000
 
-## 📊 Performance Profiles
+If the page doesn’t load, give it a few seconds on first run and refresh.
 
-Choose the profile that matches your hardware:
+## ⚡ Quick Try (one command)
 
-| Profile | CPU Usage | RAM Usage | Accuracy | Best For |
-|---------|-----------|-----------|----------|----------|
-| **Eco** | Low | ~2GB | Good | Battery life, older laptops |
-| **Balanced** | Medium | ~4GB | Better | Most users, daily use |
-| **Performance** | High | ~8GB | Best | Powerful machines, accuracy-critical |
+Runs Qdrant (Docker), Backend (FastAPI), and Frontend (Next.js) for a quick local demo:
 
-Set via environment variable:
 ```bash
-export RAG_PROFILE=balanced  # eco|balanced|performance
+chmod +x scripts/quick_try.sh
+./scripts/quick_try.sh
 ```
 
-## 🏗️ Architecture
+Notes:
+- Requires Docker, Python, Node, and (ideally) Ollama installed.
+- Press Ctrl+C in the terminal to stop both backend and frontend.
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React UI      │◄──►│  FastAPI + WS   │◄──►│    Qdrant       │
-│   (Frontend)    │    │   (Backend)     │    │ (Vector Store)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       ▼                       │
-         │              ┌─────────────────┐              │
-         │              │     Ollama      │              │
-         │              │  (Local LLM)    │              │
-         └──────────────┴─────────────────┴──────────────┘
-                        Local Processing Only
+## 🐳 Docker-only (backend + Qdrant)
+
+Use Docker Compose to run Qdrant and the Backend together. Useful when you want to keep the backend containerized and run the frontend locally.
+
+```bash
+chmod +x scripts/docker_full_up.sh
+./scripts/docker_full_up.sh
 ```
 
-### Core Components
+This runs the compose profile defined in `docker/docker-compose.yml`:
+- Qdrant: http://localhost:6333
+- Backend: http://localhost:8000
 
-- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
-- **Backend**: Python FastAPI + WebSocket streaming
-- **Vector Store**: Qdrant (local) with payload filters
-- **LLM**: Ollama integration (llama3.2, qwen2.5, etc.)
-- **Embeddings**: Local sentence-transformers models
+Then run the frontend locally:
 
-## 📁 Project Structure
-
+```bash
+cd frontend
+npm install
+npm run dev   # http://localhost:3000
 ```
-RAG_APP/
-├── docs/                    # Specifications (URD, SRS, HLD, LLD, UI Spec)
-├── backend/                 # Python FastAPI backend
-│   ├── app/
-│   │   ├── main.py         # FastAPI application
-│   │   ├── api.py          # REST endpoints
-│   │   ├── ws.py           # WebSocket streaming
-│   │   ├── models.py       # Pydantic data models
-│   │   ├── settings.py     # Configuration management
-│   │   ├── storage.py      # File operations
-│   │   ├── parsing.py      # Document text extraction
-│   │   ├── chunking.py     # Adaptive chunking
-│   │   ├── embeddings.py   # Local embeddings
-│   │   ├── qdrant_index.py # Vector store operations
-│   │   ├── retrieval.py    # RAG + dynamic-k
-│   │   ├── llm.py          # LLM inference
-│   │   └── diagnostics.py  # Logging & monitoring
-│   └── tests/
-├── frontend/                # React TypeScript frontend
-│   ├── src/
-│   │   ├── components/     # UI components
-│   │   ├── lib/            # API clients
-│   │   └── types.ts        # TypeScript types
-│   └── package.json
-├── docker/
-│   └── docker-compose.yml  # Qdrant service
-└── README.md
-```
+
+## 🧭 How To Use
+
+- Upload documents
+    - Use the Upload control in the UI to add PDF/DOCX/TXT/MD/EPUB files.
+    - The status bar shows indexing progress; the Documents list updates to “indexed”.
+
+- Ask questions
+    - Type queries in the chat input. Responses render with Markdown and KaTeX (math supported: inline $a^2+b^2=c^2$ or blocks with $$...$$).
+
+- View sources
+    - Toggle the sources panel with the “i” icon in the header to see which docs the answer used.
+
+- Model indicator
+    - The header shows the active LLM model name reported by the backend.
 
 ## 🛠️ Configuration
 
-Create a `.env` file in the backend directory:
+Create `backend/.env` (values shown are sensible defaults):
 
 ```bash
 # Performance profile
-RAG_PROFILE=balanced
+RAG_PROFILE=balanced   # eco|balanced|performance
 
-# Data directory (default: ~/RAGApp)
+# Data directory (default expands to ~/RAGApp)
 RAG_DATA_DIR=~/RAGApp
 
 # Services
@@ -148,7 +129,7 @@ QDRANT_URL=http://localhost:6333
 OLLAMA_HOST=http://localhost:11434
 
 # Models
-RAG_LLM_MODEL=llama3.2:3b
+RAG_LLM_MODEL=qwen2.5:7b-instruct  # or llama3.1:8b, etc.
 RAG_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 
 # RAG parameters
@@ -156,152 +137,168 @@ RAG_CHUNK_SIZE=800
 RAG_CHUNK_OVERLAP=200
 RAG_MAX_CONTEXT_TOKENS=4000
 
-# Optional: Enable debug logging
+# Debug logging
 RAG_DEBUG=false
 ```
 
-## 🧪 Advanced Features
+## 🏗️ Architecture
 
-### Adaptive Chunking
-Documents are automatically chunked with optimal size (500-1350 tokens) based on:
-- Content density and structure
-- Presence of headings and tables
-- Document type and length
+```
+┌───────────────────┐   ┌──────────────────┐   ┌─────────────────┐
+│     Next.js UI    │◄──│  FastAPI + WS    │◄──│     Qdrant      │
+│  (React/TypeScript)│  │   (Backend)      │   │  (Vector Store) │
+└───────────────────┘   └──────────────────┘   └─────────────────┘
+                     │                      │                       │
+                     │                      ▼                       │
+                     │             ┌─────────────────┐              │
+                     │             │     Ollama      │              │
+                     │             │   (Local LLM)   │              │
+                     └─────────────┴─────────────────┴──────────────┘
+```
 
-### Dynamic-k Retrieval
-The system automatically determines how many chunks to retrieve (3-10) based on:
-- Query complexity and scope
-- Marginal relevance scores
-- Context budget constraints
+### Core Components
 
-### Real-time Streaming
-Responses stream token-by-token via WebSocket with:
-- Animated typing indicators
-- Inline citation insertion
-- Accessibility support (screen readers)
+- Frontend: Next.js (React + TypeScript)
+- Backend: FastAPI + WebSocket streaming
+- Vector store: Qdrant (local)
+- LLM: Ollama (qwen2.5, llama3.x, etc.)
+- Embeddings: Sentence Transformers (local)
+
+## 📁 Project Structure
+
+```
+RAG_APP/
+├── backend/
+│   └── app/
+│       ├── main.py          # FastAPI app entry
+│       ├── api_complete.py  # REST endpoints (incl. /api/status)
+│       ├── ws.py            # WebSocket streaming
+│       ├── models.py        # Pydantic models
+│       ├── settings.py      # Config
+│       ├── storage.py       # File ops (uploads, parsed)
+│       ├── chunking.py      # Adaptive chunking
+│       ├── embeddings.py    # Local embeddings
+│       ├── qdrant_index.py  # Vector store ops
+│       ├── retrieval.py     # Retrieval logic
+│       └── llm.py           # LLM service
+├── frontend/
+│   └── src/
+│       ├── components/      # UI components
+│       ├── hooks/           # React Query hooks
+│       ├── lib/             # API client & constants
+│       └── types/           # TypeScript types
+├── docker/
+│   └── docker-compose.yml   # Qdrant (and optional backend) services
+└── README.md
+```
+
+## � Performance Profiles
+
+| Profile | CPU Usage | RAM Usage | Accuracy | Best For |
+|--------:|-----------|-----------|----------|----------|
+| Eco | Low | ~2GB | Good | Battery life, older laptops |
+| Balanced | Medium | ~4GB | Better | Most users |
+| Performance | High | ~8GB | Best | Powerful machines |
+
+Set via env var:
+
+```bash
+export RAG_PROFILE=balanced
+```
 
 ## 🔧 Development
 
-### Backend Development
+### Backend
+
 ```bash
 cd backend
-
-# Install with dev dependencies
 pip install -e ".[dev]"
 
 # Run tests
 pytest
 
-# Code formatting
+# Lint/format
 black app/ tests/
 isort app/ tests/
 mypy app/
 
-# Start with auto-reload
-uvicorn app.main:app --reload
+# Start API with auto-reload
+uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend Development
+### Frontend
+
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
+npm run dev   # http://localhost:3000
 
-# Start dev server
-npm run dev
-
-# Run tests
-npm test
-
-# Build for production
+# Build
 npm run build
 ```
 
-## 🔒 Security & Privacy
-
-- **Local Processing**: All operations happen on your machine
-- **No Network Calls**: Application works completely offline
-- **Encrypted Storage**: Optional document encryption at rest
-- **Secure Deletion**: Overwrite files before deletion
-- **No Telemetry**: Zero data collection or tracking
-
-## 📊 Resource Usage
-
-Typical usage on a modern laptop:
-
-| Operation | CPU | RAM | Time |
-|-----------|-----|-----|------|
-| Document Upload (10MB PDF) | 30% | +500MB | 15s |
-| Embedding Generation | 60% | +200MB | 5s |
-| Query Processing | 45% | +300MB | 2s |
-| LLM Response (100 tokens) | 40% | +400MB | 8s |
-
-## 🐛 Troubleshooting
-
-### Common Issues
+## � Troubleshooting
 
 **Qdrant connection failed**
-```bash
-# Check if Qdrant is running
-curl http://localhost:6333/health
 
-# Restart Qdrant
-docker-compose -f docker/docker-compose.yml restart qdrant
+```bash
+curl http://localhost:6333/health
+docker compose -f docker/docker-compose.yml restart qdrant
 ```
 
 **Ollama model not found**
-```bash
-# List available models
-ollama list
 
-# Pull required model
-ollama pull llama3.2:3b
+```bash
+ollama list
+ollama pull qwen2.5:7b-instruct
 ```
 
-**Out of memory errors**
-```bash
-# Switch to Eco profile
-export RAG_PROFILE=eco
+**Frontend shows timeout (~30s) or slow status**
 
-# Or reduce context budget
+- Ensure both services are running (http://localhost:3000 and http://localhost:8000)
+- Check `/api/status`: `curl http://localhost:8000/api/status`
+- Make sure Ollama is serving and `RAG_LLM_MODEL` matches a pulled model
+- Status health checks are capped to ~2s; if still slow, verify Qdrant and Ollama
+
+**Out of memory errors**
+
+```bash
+export RAG_PROFILE=eco
 export RAG_MAX_CONTEXT_TOKENS=2000
 ```
 
-**Slow response times**
-- Check system resources with `htop` or Task Manager
-- Switch to Performance profile if you have >8GB RAM
-- Consider using a smaller LLM model
+### Logs & Data
 
-### Logs
+Application data (uploads, parsed, indices, logs) lives under `~/RAGApp/` by default.
+Logs are written to `~/RAGApp/logs/app.jsonl`.
 
-Application logs are stored in `~/RAGApp/logs/app.jsonl` in structured JSON format.
+## 🔒 Security & Privacy
 
-Enable debug logging:
-```bash
-export RAG_DEBUG=true
-```
+- Local processing: All operations happen on your machine
+- No external cloud calls: Works fully offline (Ollama + Qdrant local)
+- Optional encryption at rest and secure deletion supported
+- No telemetry or tracking
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch (`git checkout -b feature/my-change`)
+3. Commit (`git commit -m "Describe your change"`)
+4. Push (`git push origin feature/my-change`)
 5. Open a Pull Request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## 🙏 Acknowledgments
 
-- [Qdrant](https://qdrant.tech/) - Vector similarity search engine
-- [Ollama](https://ollama.ai/) - Local LLM runtime
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [React](https://react.dev/) - Frontend framework
-- [Sentence Transformers](https://www.sbert.net/) - State-of-the-art embeddings
+- Qdrant — Vector similarity search
+- Ollama — Local LLM runtime
+- FastAPI — Python web framework
+- Next.js — React framework
+- Sentence Transformers — Embeddings
 
 ---
 
-**Built with ❤️ for privacy-conscious users who want to keep their documents local.**
+Built with privacy in mind — your documents stay local.
