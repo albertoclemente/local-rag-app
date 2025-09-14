@@ -12,7 +12,69 @@ A completely local Retrieval-Augmented Generation (RAG) web app for document Q&A
 - Profiles: Eco / Balanced / Performance
 - Modern UI: Next.js (React + TypeScript)
 
-## 🚀 Quick Start
+## � Simple Start (No Git Needed)
+
+This is the easiest path for non‑experts on macOS.
+
+1) Install these apps
+- Docker Desktop: https://www.docker.com/products/docker-desktop/
+- Ollama (Local LLM): https://ollama.ai/
+- Node.js 18+ (LTS): https://nodejs.org/ or `brew install node`
+- Python 3.9+ (macOS usually has `python3` preinstalled)
+
+2) Download the app (ZIP)
+- Open the project page in your browser: https://github.com/albertoclemente/local-rag-app
+- Click the green “Code” button → “Download ZIP”
+- Unzip it (double‑click). You’ll get a folder like `local-rag-app-main`.
+
+3) Start everything automatically (one command)
+- Open Terminal and run these commands (adjust the path as needed):
+
+```bash
+cd ~/Downloads/local-rag-app-main
+chmod +x scripts/quick_try.sh
+./scripts/quick_try.sh
+```
+
+- When it finishes starting, open the UI: http://localhost:3000
+
+4) If the one‑command script doesn’t work, do it manually
+- Start Qdrant (vector DB):
+```bash
+docker compose -f docker/docker-compose.yml up -d qdrant
+```
+- Start Ollama and pull a model:
+```bash
+ollama serve &
+ollama pull qwen2.5:7b-instruct
+```
+- Start the backend (FastAPI):
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+- Start the frontend (Next.js):
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- Open the app: http://localhost:3000
+
+5) Use it
+- Click “Upload” to add PDF/DOCX/TXT/MD/EPUB files
+- Ask your question in the chat input
+- Toggle the sources panel with the “i” icon to see which docs were used
+
+Tips
+- First run may take a minute (model pull, first build). Refresh if the UI is blank.
+- If ports are busy: stop other apps using 3000/8000/6333 or reboot Docker Desktop.
+- To stop everything from the one‑command run, press Ctrl+C in the Terminal windows.
+
+## �🚀 Quick Start
 
 ### Prerequisites
 
