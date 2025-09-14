@@ -5,6 +5,8 @@ import { X, Save, RotateCcw } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '@/hooks/api'
 import { cn } from '@/lib/utils'
 import type { Settings } from '@/types'
+import { useThemeContext } from '@/components/providers'
+import type { Theme } from '@/lib/theme'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -14,6 +16,7 @@ interface SettingsModalProps {
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { data: currentSettings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
+  const { theme, setTheme } = useThemeContext()
   const [formData, setFormData] = useState<Settings>({
     rag_profile: 'balanced',
     chunk_size: 1000,
@@ -71,10 +74,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         />
         
         {/* Modal */}
-        <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+        <div className="relative bg-[var(--bg-elev)] text-[var(--text-primary)] rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)]">
+            <h2 className="text-xl font-semibold">Settings</h2>
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
@@ -91,15 +94,27 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Theme */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Theme</label>
+                  <select
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value as Theme)}
+                    className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
+                  >
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
                 {/* RAG Profile */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     RAG Profile
                   </label>
                   <select
                     value={formData.rag_profile}
                     onChange={(e) => handleInputChange('rag_profile', e.target.value as 'eco' | 'balanced' | 'performance')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                   >
                     <option value="eco">Eco - Fast, lower accuracy</option>
                     <option value="balanced">Balanced - Good speed and accuracy</option>
@@ -110,27 +125,27 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {/* Chunking Settings */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Chunk Size
                     </label>
                     <input
                       type="number"
                       value={formData.chunk_size}
                       onChange={(e) => handleInputChange('chunk_size', parseInt(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                       min="100"
                       max="4000"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Chunk Overlap
                     </label>
                     <input
                       type="number"
                       value={formData.chunk_overlap}
                       onChange={(e) => handleInputChange('chunk_overlap', parseInt(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                       min="0"
                       max="1000"
                     />
@@ -140,20 +155,20 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {/* Retrieval Settings */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Retrieval K
                     </label>
                     <input
                       type="number"
                       value={formData.retrieval_k}
                       onChange={(e) => handleInputChange('retrieval_k', parseInt(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                       min="1"
                       max="20"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Min Relevance Score
                     </label>
                     <input
@@ -161,7 +176,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       step="0.1"
                       value={formData.min_relevance_score}
                       onChange={(e) => handleInputChange('min_relevance_score', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                       min="0"
                       max="1"
                     />
@@ -171,7 +186,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {/* LLM Settings */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Temperature
                     </label>
                     <input
@@ -179,20 +194,20 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       step="0.1"
                       value={formData.llm_temperature}
                       onChange={(e) => handleInputChange('llm_temperature', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                       min="0"
                       max="2"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Max Tokens
                     </label>
                     <input
                       type="number"
                       value={formData.max_tokens}
                       onChange={(e) => handleInputChange('max_tokens', parseInt(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                       min="100"
                       max="8192"
                     />
@@ -201,13 +216,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                 {/* System Prompt */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     System Prompt (Optional)
                   </label>
                   <textarea
                     value={formData.system_prompt || ''}
                     onChange={(e) => handleInputChange('system_prompt', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-[var(--border-color)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-[var(--text-primary)]"
                     rows={4}
                     placeholder="Custom system prompt for the LLM..."
                   />
@@ -217,7 +232,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-elev)]">
             <button
               onClick={handleReset}
               className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"

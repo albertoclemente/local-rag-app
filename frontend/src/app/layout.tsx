@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="theme-light">
       <body className={`${inter.variable} font-sans antialiased`}>
         <AppProviders>
           {children}
