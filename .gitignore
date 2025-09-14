@@ -272,6 +272,17 @@ parsed/
 indices/
 backend_data/
 qdrant_data/
+chunks/
+**/chunks/**
+vectors/
+**/vectors/**
+*.hnsw
+*.ann
+*.faiss
+*.ivf
+*.npy
+*.npz
+*.pkl
 
 # Uploaded files in repo root (just in case)
 *.pdf
