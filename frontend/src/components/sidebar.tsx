@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { 
   FileText, 
   Upload, 
@@ -12,7 +12,7 @@ import {
   Plus,
   MoreVertical
 } from 'lucide-react'
-import { useDocuments } from '@/hooks/api'
+import { useDocuments, useUploadDocument } from '@/hooks/api'
 import { cn, formatFileSize, formatTimestamp } from '@/lib/utils'
 import type { Document } from '@/types'
 
@@ -24,7 +24,31 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { data: documentsData, isLoading, error } = useDocuments()
+  const uploadDocument = useUploadDocument()
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      await uploadDocument.mutateAsync({
+        file,
+        title: file.name
+      })
+      // Reset the input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (error) {
+      console.error('Upload failed:', error)
+    }
+  }
 
   // Ensure documents is always an array and handle different response formats
   const documents: Document[] = Array.isArray(documentsData) 
@@ -100,10 +124,25 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
 
         {/* Upload Button */}
-        <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <button 
+          onClick={handleUploadClick}
+          disabled={uploadDocument.isPending}
+          className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <Upload className="h-4 w-4" />
-          <span className="text-sm font-medium">Upload Document</span>
+          <span className="text-sm font-medium">
+            {uploadDocument.isPending ? 'Uploading...' : 'Upload Document'}
+          </span>
         </button>
+        
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt,.md,.doc,.docx"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
       </div>
 
       {/* Tags Filter */}

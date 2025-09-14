@@ -56,11 +56,11 @@ export function StatusBar() {
   }
 
   const formatPercentage = (value: number | null | undefined) => {
-    return value ? `${Math.round(value)}%` : 'N/A'
+    return value == null ? 'N/A' : `${Math.round(value)}%`
   }
 
   const formatMemoryUsage = (value: number | null | undefined) => {
-    if (!value) return 'N/A'
+    if (value == null) return 'N/A'
     return `${(value / 1024 / 1024 / 1024).toFixed(1)}GB`
   }
 
@@ -89,8 +89,8 @@ export function StatusBar() {
           <span className="text-gray-300">CPU:</span>
           <span className={cn(
             'font-mono',
-            status?.cpu_usage && status.cpu_usage > 80 ? 'text-red-400' :
-            status?.cpu_usage && status.cpu_usage > 60 ? 'text-yellow-400' : 'text-green-400'
+            status?.cpu_usage != null && status.cpu_usage > 80 ? 'text-red-400' :
+            status?.cpu_usage != null && status.cpu_usage > 60 ? 'text-yellow-400' : 'text-green-400'
           )}>
             {formatPercentage(status?.cpu_usage)}
           </span>

@@ -40,3 +40,17 @@ body {
 .message-content {
   color: #000000 !important;
 }
+
+/* Override for user messages - white text on blue background */
+.bg-blue-600 p,
+.bg-blue-600 div,
+.bg-blue-600 .prose p,
+[class*="bg-blue-600"] p,
+[class*="bg-blue-600"] [class*="text-white"] {
+  color: #ffffff !important;
+}
+
+/* Specific override for user message text */
+[style*="color: white"] {
+  color: #ffffff !important;
+}

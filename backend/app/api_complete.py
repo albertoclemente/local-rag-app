@@ -455,6 +455,7 @@ async def get_system_status() -> SystemStatus:
         retrieval_service = await get_retrieval_service()
         
         # Get health status from each service
+        llm_health = {}
         try:
             qdrant_health = await qdrant_service.health_check()
             llm_health = await llm_service.health_check()
@@ -466,16 +467,36 @@ async def get_system_status() -> SystemStatus:
         # Get actual document count
         documents = await storage_service.list_documents()
         document_count = len(documents)
-        
+
+        # Gather resource usage
+        from app.diagnostics import get_resource_monitor
+        monitor = get_resource_monitor()
+        system = monitor.get_system_resources()
+        mem = monitor.get_memory_usage()
+
+        # Compute simple CPU and RAM metrics for UI
+        cpu_usage = system.get("cpu_percent") or 0.0
+        ram_usage_bytes = int(mem.get("rss_bytes") or 0)
+
+        # Determine model name if available from health payload
+        model_name = None
+        try:
+            if isinstance(llm_health, dict):
+                model_name = (
+                    llm_health.get("model")
+                    or (llm_health.get("model_info") or {}).get("model")
+                    or (llm_health.get("model_info") or {}).get("name")
+                )
+        except Exception as e:
+            logger.warning(f"Failed to extract LLM model name: {e}")
+
         return SystemStatus(
             status="operational" if services_healthy else "degraded",
-            uptime=0,  # TODO: Track actual uptime
-            memory_usage=0.0,  # TODO: Get actual memory usage
-            disk_usage=0.0,  # TODO: Get actual disk usage
-            active_sessions=0,  # TODO: Track active WebSocket sessions
-            total_documents=document_count,
-            total_chunks=0,  # TODO: Get actual chunk count from Qdrant
-            offline=False  # Local operation is online
+            cpu_usage=cpu_usage,
+            ram_usage=ram_usage_bytes,
+            indexing_progress=None,  # Could be wired to background jobs if available
+            offline=False,
+            model_name=model_name
         )
     except Exception as e:
         logger.error(f"Error getting system status: {e}")

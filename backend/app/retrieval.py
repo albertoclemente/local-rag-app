@@ -36,7 +36,7 @@ class RetrievalParams:
     """Parameters for retrieval configuration."""
     k_min: int = 3
     k_max: int = 10
-    score_threshold: float = 0.7
+    score_threshold: float = 0.1  # Lowered from 0.7 for testing
     epsilon_gain: float = 0.05  # Minimum marginal gain to continue
     coverage_threshold: float = 0.85  # Stop when coverage plateaus
     budget_tokens: int = 4000  # Maximum context budget
@@ -258,6 +258,7 @@ class DynamicKController:
         while current_k <= self.params.k_max:
             # Retrieve current batch
             try:
+                logger.info(f"Attempting Qdrant search with k={current_k}, threshold={self.params.score_threshold}")
                 raw_results = await qdrant_service.search_similar(
                     query_embedding,
                     limit=current_k,
@@ -265,8 +266,11 @@ class DynamicKController:
                     score_threshold=self.params.score_threshold
                 )
                 
+                logger.info(f"Qdrant search returned {len(raw_results) if raw_results else 0} results")
+                
                 if not raw_results:
                     stop_reason = "no_results"
+                    logger.warning(f"No results found with threshold {self.params.score_threshold}")
                     break
                 
                 # Convert to ChunkResult objects
@@ -484,14 +488,18 @@ class RetrievalEngine:
         try:
             # Generate query embedding
             query_embedding = await embed_query(query, profile=self.profile)
+            logger.info(f"Generated embedding with shape: {query_embedding.shape}")
             
             # Get services
             qdrant_service = await get_qdrant_service(self.profile)
+            logger.info(f"Got Qdrant service")
             
             # Perform dynamic-k retrieval
             result = await dynamic_k.determine_optimal_k(
                 query, query_embedding, qdrant_service, doc_filter
             )
+            
+            logger.info(f"Retrieval result: {len(result.chunks)} chunks, coverage: {result.coverage_score}")
             
             return result
             

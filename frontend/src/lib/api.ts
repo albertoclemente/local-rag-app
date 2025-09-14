@@ -37,7 +37,16 @@ api.interceptors.response.use(
     return response
   },
   (error) => {
-    console.error('API Response Error:', error.response?.data || error.message)
+    // Safely log error details
+    const errorData = error.response?.data
+    const errorMessage = error.message
+    
+    if (errorData && typeof errorData === 'object') {
+      console.error('API Response Error:', JSON.stringify(errorData, null, 2))
+    } else {
+      console.error('API Response Error:', errorData || errorMessage)
+    }
+    
     return Promise.reject(error)
   }
 )

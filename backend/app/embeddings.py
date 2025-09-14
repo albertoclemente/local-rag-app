@@ -203,7 +203,13 @@ class LocalEmbedder:
     async def embed_text(self, text: str) -> np.ndarray:
         """Generate embedding for a single text."""
         embeddings = await self.embed_texts([text])
-        return embeddings[0]
+        embedding = embeddings[0]
+        
+        # Ensure 1D output for single text
+        if embedding.ndim > 1:
+            embedding = embedding.squeeze()
+        
+        return embedding
     
     async def embed_texts(self, texts: List[str]) -> List[np.ndarray]:
         """Generate embeddings for multiple texts with caching and batching."""
@@ -274,11 +280,13 @@ class LocalEmbedder:
                     show_progress_bar=False
                 )
                 
-                # Ensure we have a list of arrays
-                if len(batch_texts) == 1:
-                    batch_embeddings = [batch_embeddings]
-                else:
-                    batch_embeddings = list(batch_embeddings)
+                # Ensure consistent shape: always 2D, then extract individual vectors
+                if batch_embeddings.ndim == 1:
+                    # Single text case - add batch dimension
+                    batch_embeddings = batch_embeddings.reshape(1, -1)
+                
+                # Convert to list of 1D arrays
+                batch_embeddings = [batch_embeddings[i] for i in range(batch_embeddings.shape[0])]
                 
                 all_embeddings.extend(batch_embeddings)
                 

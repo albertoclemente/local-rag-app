@@ -88,6 +88,7 @@ export interface SystemStatus {
   ram_usage?: number
   indexing_progress?: number
   offline: boolean
+  model_name?: string
 }
 
 export interface Settings {

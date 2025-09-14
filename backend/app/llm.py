@@ -17,6 +17,7 @@ import httpx
 from .settings import get_settings
 from .diagnostics import get_logger
 from .retrieval import RetrievalResult
+from .storage import get_document_storage
 
 logger = get_logger(__name__)
 
@@ -161,6 +162,23 @@ IMPORTANT: Do not include chunk references, citations, or source numbers in your
         # Add conversation context if available
         if conversation_context:
             prompt_parts.append(f"\n{conversation_context}\n")
+
+        # Always include an accurate Uploaded Document Inventory from storage
+        try:
+            storage = get_document_storage()
+            uploaded_docs = await storage.list_documents()
+        except Exception as e:
+            logger.warning(f"Failed to list uploaded documents: {e}")
+            uploaded_docs = []
+
+        prompt_parts.append("\n=== UPLOADED DOCUMENT INVENTORY ===\n")
+        prompt_parts.append(f"Total uploaded documents in system: {len(uploaded_docs)}\n")
+        if uploaded_docs:
+            prompt_parts.append("Document files by name:\n")
+            for i, doc in enumerate(uploaded_docs, 1):
+                name = getattr(doc, "name", None) or getattr(doc, "filename", None) or "Unknown file"
+                prompt_parts.append(f"  {i}. \"{name}\"\n")
+        prompt_parts.append("\n")
         
         # Add retrieved context if available
         if request.retrieval_result and request.retrieval_result.chunks:
@@ -203,40 +221,34 @@ IMPORTANT: Do not include chunk references, citations, or source numbers in your
             
             chunks_by_doc = final_chunks_by_doc
             
-            prompt_parts.append("\n=== UPLOADED DOCUMENT INVENTORY ===\n")
-            prompt_parts.append(f"Total uploaded documents in system: {len(chunks_by_doc)}\n\n")
+            # Now include the context retrieved for this specific answer
             prompt_parts.append("Context from retrieved documents:\n")
             
             # If all chunks are from the same document, present it more clearly
             if len(chunks_by_doc) == 1:
                 doc_name, chunks = next(iter(chunks_by_doc.items()))
-                prompt_parts.append(f"\n=== SOURCE DOCUMENT: \"{doc_name}\" ===\n")
-                prompt_parts.append(f"This is 1 (ONE) uploaded document file containing relevant content:\n\n")
-                
+                prompt_parts.append(f"\n=== RETRIEVED FROM: \"{doc_name}\" ===\n")
+                prompt_parts.append("This response includes content from 1 uploaded document file:\n\n")
+
                 for chunk in chunks:
                     prompt_parts.append(f"{chunk.text}\n\n")
-                
-                prompt_parts.append(f"DOCUMENT COUNT CLARIFICATION:\n")
-                prompt_parts.append(f"- Uploaded document files: 1\n")
-                prompt_parts.append(f"- Source file: \"{doc_name}\"\n")
-                prompt_parts.append(f"- Any academic papers mentioned in the text above are REFERENCES, not additional uploaded documents\n\n")
+
+                prompt_parts.append("Note: Academic references mentioned within the text are not separate uploaded documents.\n\n")
             else:
-                # Multiple documents - show them clearly separated
-                prompt_parts.append(f"Retrieved content from {len(chunks_by_doc)} different uploaded document files:\n\n")
-                
+                # Multiple documents retrieved for this answer - show them clearly separated
+                prompt_parts.append(f"Retrieved content from {len(chunks_by_doc)} uploaded document file(s):\n\n")
+
                 for doc_num, (doc_name, chunks) in enumerate(chunks_by_doc.items(), 1):
-                    prompt_parts.append(f"\n=== UPLOADED DOCUMENT #{doc_num}: \"{doc_name}\" ===\n")
-                    prompt_parts.append(f"Document file #{doc_num} relevant content:\n\n")
+                    prompt_parts.append(f"\n=== RETRIEVED DOCUMENT #{doc_num}: \"{doc_name}\" ===\n")
+                    prompt_parts.append(f"Relevant content from document #{doc_num}:\n\n")
                     
                     for chunk in chunks:
                         prompt_parts.append(f"{chunk.text}\n\n")
-                
-                prompt_parts.append(f"DOCUMENT COUNT CLARIFICATION:\n")
-                prompt_parts.append(f"- Total uploaded document files: {len(chunks_by_doc)}\n")
-                prompt_parts.append(f"- Document files by name:\n")
+
+                prompt_parts.append("Retrieved documents in this response:\n")
                 for i, doc_name in enumerate(chunks_by_doc.keys(), 1):
                     prompt_parts.append(f"  {i}. \"{doc_name}\"\n")
-                prompt_parts.append(f"- Academic references mentioned within these files are NOT separate documents\n\n")
+                prompt_parts.append("Note: Academic references mentioned within these files are NOT separate uploaded documents.\n\n")
         
         # Add the user query
         prompt_parts.append(f"Human: {request.prompt}\n\nAssistant: ")

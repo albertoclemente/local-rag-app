@@ -74,7 +74,7 @@ export function AppHeader({ onToggleSources, sourcesOpen }: AppHeaderProps) {
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
           <span className="text-sm text-gray-600">Model:</span>
-          <span className="text-sm font-medium text-gray-900">local-llm</span>
+          <span className="text-sm font-medium text-gray-900">{status?.model_name || 'local-llm'}</span>
         </div>
         
         <div className="flex items-center space-x-2">

@@ -252,10 +252,11 @@ class Settings(BaseModel):
 class SystemStatus(BaseModel):
     """System status information"""
     status: str = "ready"
-    cpu_usage: Optional[float] = None
-    ram_usage: Optional[float] = None
-    indexing_progress: Optional[Dict[str, Any]] = None
+    cpu_usage: Optional[float] = None  # Percentage 0-100
+    ram_usage: Optional[int] = None    # Bytes (used for display in GB)
+    indexing_progress: Optional[int] = None  # 0-100; hide when None or 100
     offline: bool = False  # Changed default to False for local operation
+    model_name: Optional[str] = None
 
 
 class ErrorResponse(BaseModel):

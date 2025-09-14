@@ -30,6 +30,9 @@ if __name__ == "__main__":
     elif args.test_name == 'tc_func_011':
         from test_tc_func_011 import run_reindex_test
         run_reindex_test()
+    elif args.test_name == 'tc_func_020':
+        from test_tc_func_020 import run_tc_func_020
+        run_tc_func_020()
     elif args.all:
         print("Running all tests...")
         # Run TC-FUNC-010

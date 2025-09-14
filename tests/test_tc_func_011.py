@@ -53,7 +53,7 @@ def get_document_status(document_id):
             for doc in documents:
                 if doc.get('id') == document_id:
                     status = doc.get('status', 'unknown')
-                    chunk_count = doc.get('chunk_count', 0)
+                    chunk_count = doc.get('chunkCount', 0)  # Use correct field name with alias
                     print(f"📊 Document status: {status}, Chunks: {chunk_count}")
                     return status, chunk_count
             print(f"❌ Document {document_id} not found in list")
