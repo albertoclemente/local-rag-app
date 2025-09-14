@@ -177,6 +177,13 @@ Persistence
 Warning
 - Running `docker compose down -v` removes named volumes. With the new bind-mounts, data lives in your home folder and is not removed by `-v`. Do not delete `~/RAGApp` if you want to keep documents.
 
+Migration
+- If you previously used Docker with named volumes and want to migrate that data:
+```bash
+./scripts/migrate_docker_volumes.sh
+```
+- This copies old volume data into `~/RAGApp` so it persists with the new bind-mount setup.
+
 ## 🧭 How To Use
 
 - Upload documents
