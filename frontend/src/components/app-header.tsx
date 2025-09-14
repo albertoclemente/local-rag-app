@@ -1,8 +1,10 @@
 'use client'
 
+import React, { useState } from 'react'
 import { Settings, Info, Brain } from 'lucide-react'
 import { useSettings, useSystemStatus } from '@/hooks/api'
 import { cn } from '@/lib/utils'
+import { SettingsModal } from '@/components/settings-modal'
 
 interface AppHeaderProps {
   onToggleSources: () => void
@@ -10,8 +12,14 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ onToggleSources, sourcesOpen }: AppHeaderProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const { data: settings, isLoading: settingsLoading } = useSettings()
   const { data: status, isLoading: statusLoading } = useSystemStatus()
+
+  // Debug settings modal state
+  React.useEffect(() => {
+    console.log('⚙️ Settings modal state changed:', settingsOpen)
+  }, [settingsOpen])
 
   const getStatusColor = () => {
     if (statusLoading || !status) return 'bg-gray-500'
@@ -53,7 +61,8 @@ export function AppHeader({ onToggleSources, sourcesOpen }: AppHeaderProps) {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
+    <>
+      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
       {/* Left Side - Logo and Title */}
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
@@ -103,7 +112,12 @@ export function AppHeader({ onToggleSources, sourcesOpen }: AppHeaderProps) {
           <Info className="h-5 w-5" />
         </button>
         
-        <button
+                <button
+          onClick={() => {
+            console.log('⚙️ Settings button clicked!')
+            alert('Settings button clicked! Check console for details.')
+            setSettingsOpen(true)
+          }}
           className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="Settings"
         >
@@ -111,5 +125,14 @@ export function AppHeader({ onToggleSources, sourcesOpen }: AppHeaderProps) {
         </button>
       </div>
     </header>
+
+    {/* Settings Modal */}
+    {settingsOpen && (
+      <SettingsModal 
+        isOpen={settingsOpen} 
+        onClose={() => setSettingsOpen(false)} 
+      />
+    )}
+  </>
   )
 }

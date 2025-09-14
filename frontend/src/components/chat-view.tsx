@@ -9,9 +9,13 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import type { ChatMessage, StreamingQueryResponse, Citation } from '@/types'
+import type { ChatMessage, StreamingQueryResponse, Citation, SourceInfo } from '@/types'
 
-export function ChatView() {
+interface ChatViewProps {
+  onSourcesUpdate?: (sources: SourceInfo[], citations: Citation[]) => void
+}
+
+export function ChatView({ onSourcesUpdate }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -72,6 +76,19 @@ export function ChatView() {
       }
 
       setMessages(prev => [...prev, assistantMessage])
+
+      // Update sources panel with the response data
+      console.log('📝 ChatView: Response received:', {
+        chunks: response.chunks,
+        citations: response.citations,
+        chunksLength: response.chunks?.length,
+        citationsLength: response.citations?.length
+      })
+      
+      if (onSourcesUpdate) {
+        onSourcesUpdate(response.chunks || [], response.citations || [])
+        console.log('📡 ChatView: Called onSourcesUpdate with:', response.chunks?.length, 'sources and', response.citations?.length, 'citations')
+      }
     } catch (error) {
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,

@@ -1,54 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
+import { useDocuments } from '@/hooks/api'
 import { BookOpen, Eye, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Citation, ChunkResult } from '@/types'
+import type { Citation, ChunkResult, SourceInfo } from '@/types'
 
-export function SourcesPanel() {
+interface SourcesPanelProps {
+  sources?: SourceInfo[]
+  citations?: Citation[]
+}
+
+export function SourcesPanel({ sources = [], citations = [] }: SourcesPanelProps) {
   const [activeTab, setActiveTab] = useState<'citations' | 'chunks'>('citations')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
 
-  // Mock data - in real app this would come from the latest query response
-  const mockCitations: Citation[] = [
-    {
-      chunk_index: 0,
-      doc_id: 'doc1',
-      doc_title: 'Machine Learning Fundamentals.pdf',
-      page_number: 5,
-      relevance_score: 0.95,
-      content_preview: 'Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn from and make predictions or decisions based on data...'
-    },
-    {
-      chunk_index: 1,
-      doc_id: 'doc2',
-      doc_title: 'Deep Learning Guide.pdf',
-      page_number: 12,
-      relevance_score: 0.87,
-      content_preview: 'Neural networks are computing systems inspired by biological neural networks. They consist of interconnected nodes that process information...'
-    }
-  ]
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🗂️ SourcesPanel: Props updated:', {
+      sourcesCount: sources.length,
+      citationsCount: citations.length,
+      sources: sources,
+      citations: citations
+    })
+  }, [sources, citations])
 
-  const mockChunks: ChunkResult[] = [
-    {
-      content: 'Machine learning is a subset of artificial intelligence (AI) that focuses on algorithms that can learn from and make predictions or decisions based on data, without being explicitly programmed for every scenario.',
-      score: 0.95,
-      metadata: {
-        doc_id: 'doc1',
-        chunk_index: 0,
-        page_number: 5
-      }
-    },
-    {
-      content: 'Neural networks are computing systems inspired by biological neural networks that constitute animal brains. They consist of interconnected nodes (neurons) that process information using a connectionist approach to computation.',
-      score: 0.87,
-      metadata: {
-        doc_id: 'doc2',
-        chunk_index: 1,
-        page_number: 12
-      }
-    }
-  ]
+  // Use provided data or fall back to empty arrays
+  const displayCitations = citations.length > 0 ? citations : []
+  const displaySources = sources.length > 0 ? sources : []
 
   const toggleExpanded = (id: string) => {
     const newExpanded = new Set(expandedItems)
@@ -65,6 +44,13 @@ export function SourcesPanel() {
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-3">Sources & Context</h3>
+        
+        {/* Debug Info - TEMPORARY */}
+        <div className="mb-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs">
+          <strong>DEBUG:</strong> Sources: {sources.length}, Citations: {citations.length}
+          <br />
+          Last update: {new Date().toLocaleTimeString()}
+        </div>
         
         {/* Tabs */}
         <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
@@ -97,13 +83,13 @@ export function SourcesPanel() {
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'citations' ? (
           <CitationsView 
-            citations={mockCitations}
+            citations={displayCitations}
             expandedItems={expandedItems}
             onToggleExpanded={toggleExpanded}
           />
         ) : (
           <ChunksView 
-            chunks={mockChunks}
+            chunks={displaySources}
             expandedItems={expandedItems}
             onToggleExpanded={toggleExpanded}
           />
@@ -137,6 +123,17 @@ interface CitationsViewProps {
 }
 
 function CitationsView({ citations, expandedItems, onToggleExpanded }: CitationsViewProps) {
+  // Get document metadata for title mapping
+  const { data: docsData } = useDocuments()
+  const docMap = React.useMemo(() => {
+    const map = new Map<string, string>()
+    if (Array.isArray(docsData)) {
+      for (const doc of docsData) {
+        map.set(doc.id, doc.title || doc.filename || doc.name || doc.id)
+      }
+    }
+    return map
+  }, [docsData])
   return (
     <div className="p-4 space-y-3">
       {citations.length === 0 ? (
@@ -160,7 +157,7 @@ function CitationsView({ citations, expandedItems, onToggleExpanded }: Citations
                         {index + 1}
                       </span>
                       <span className="text-sm font-medium text-gray-900">
-                        {citation.doc_title}
+                        {docMap.get(citation.doc_id) || citation.doc_title || citation.doc_id}
                       </span>
                     </div>
                     
@@ -202,7 +199,7 @@ function CitationsView({ citations, expandedItems, onToggleExpanded }: Citations
 }
 
 interface ChunksViewProps {
-  chunks: ChunkResult[]
+  chunks: SourceInfo[]
   expandedItems: Set<string>
   onToggleExpanded: (id: string) => void
 }
@@ -213,7 +210,7 @@ function ChunksView({ chunks, expandedItems, onToggleExpanded }: ChunksViewProps
       {chunks.length === 0 ? (
         <div className="text-center text-gray-500 py-8">
           <Eye className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-          <p>No chunks retrieved</p>
+          <p>No sources retrieved</p>
           <p className="text-sm">Ask a question to see retrieved content</p>
         </div>
       ) : (
@@ -227,13 +224,11 @@ function ChunksView({ chunks, expandedItems, onToggleExpanded }: ChunksViewProps
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center space-x-2">
                     <span className="text-xs text-gray-500">
-                      Chunk {chunk.metadata.chunk_index}
+                      Source {index + 1}
                     </span>
-                    {chunk.metadata.page_number && (
-                      <span className="text-xs text-gray-500">
-                        • Page {chunk.metadata.page_number}
-                      </span>
-                    )}
+                    <span className="text-xs text-gray-500">
+                      • {chunk.document}
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className="text-xs text-gray-500">

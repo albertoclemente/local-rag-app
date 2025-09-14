@@ -41,6 +41,12 @@ export interface ChunkResult {
   }
 }
 
+export interface SourceInfo {
+  document: string
+  content: string
+  score: number
+}
+
 export interface Citation {
   chunk_index: number
   doc_id: string
@@ -66,7 +72,7 @@ export interface QueryResponse {
 
 export interface StreamingQueryResponse {
   answer: string
-  chunks: ChunkResult[]
+  chunks: SourceInfo[]  // Updated to use SourceInfo from backend SOURCES event
   citations: Citation[]
   complexity: 'simple' | 'moderate' | 'complex'
   query_id: string

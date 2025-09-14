@@ -7,10 +7,24 @@ import { Sidebar } from '@/components/sidebar'
 import { ChatView } from '@/components/chat-view'
 import { SourcesPanel } from '@/components/sources-panel'
 import { StatusBar } from '@/components/status-bar'
+import type { Citation, SourceInfo } from '@/types'
 
 export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [currentSources, setCurrentSources] = useState<SourceInfo[]>([])
+  const [currentCitations, setCurrentCitations] = useState<Citation[]>([])
+
+  const handleSourcesUpdate = (sources: SourceInfo[], citations: Citation[]) => {
+    console.log('🏠 HomePage: Updating sources state:', {
+      sourcesCount: sources.length,
+      citationsCount: citations.length,
+      sources: sources,
+      citations: citations
+    })
+    setCurrentSources(sources)
+    setCurrentCitations(citations)
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -39,7 +53,7 @@ export default function HomePage() {
         <div className="flex-1 flex overflow-hidden">
           {/* Chat View */}
           <div className="flex-1 flex flex-col">
-            <ChatView />
+            <ChatView onSourcesUpdate={handleSourcesUpdate} />
           </div>
 
           {/* Sources Panel */}
@@ -49,7 +63,12 @@ export default function HomePage() {
               sourcesOpen ? 'w-96' : 'w-0 overflow-hidden'
             )}
           >
-            {sourcesOpen && <SourcesPanel />}
+            {sourcesOpen && (
+              <SourcesPanel 
+                sources={currentSources} 
+                citations={currentCitations} 
+              />
+            )}
           </div>
         </div>
 

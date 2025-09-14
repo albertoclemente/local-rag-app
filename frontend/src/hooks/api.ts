@@ -141,6 +141,8 @@ export function useSubmitQuery() {
       onStreamingStart?: () => void,
       onStreamingEnd?: () => void 
     }) => {
+      // Configurable stream timeout; disabled by default (<= 0)
+      const STREAM_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_STREAM_TIMEOUT_MS ?? 0)
       try {
         // Step 1: Start the query via REST API
         const response = await queryApi.query({
@@ -158,6 +160,7 @@ export function useSubmitQuery() {
           let answer = ''
           const citations: Citation[] = []
           let sources: any[] = []
+          const sourcesByLabel = new Map<number, any>()
           let isComplete = false
           
           ws.onopen = () => {
@@ -182,29 +185,76 @@ export function useSubmitQuery() {
                   }
                   break
                   
-                case 'CITATION':
+                case 'CITATION': {
+                  const label: number = message.label
+                  const src = sourcesByLabel.get(label)
+                  const inferredDocId = message.chunkId?.split('#')[0] || src?.docId || ''
+                  const inferredTitle = src?.document || src?.filename || src?.name || src?.docId || inferredDocId
                   citations.push({
-                    chunk_index: message.label,
-                    doc_id: message.chunkId?.split('#')[0] || '',
-                    doc_title: `Document ${message.label}`,
-                    page_number: undefined,
-                    relevance_score: 0.8,
-                    content_preview: ''
+                    chunk_index: label,
+                    doc_id: inferredDocId,
+                    doc_title: inferredTitle,
+                    page_number: src?.pageStart,
+                    relevance_score: typeof src?.score === 'number' ? src.score : 0.8,
+                    content_preview: src?.text || src?.content || ''
                   })
                   break
+                }
                   
-                case 'SOURCES':
-                  sources = message.sources || []
+                case 'SOURCES': {
+                  console.log('🔎 SOURCES event payload:', message.sources)
+                  const rawSources = message.sources || []
+                  // Normalize and index by label for later citation enrichment
+                  sources = rawSources.map((s: any) => {
+                    const label = s.label ?? s.index ?? 0
+                    const docId = s.docId ?? s.doc_id ?? s.documentId ?? s.document_id ?? ''
+                    const text = s.text ?? s.content ?? s.snippet ?? ''
+                    const score = typeof s.score === 'number' ? s.score : (typeof s.similarity === 'number' ? s.similarity : 0)
+                    const pageStart = s.pageStart ?? s.page_number ?? s.page ?? undefined
+                    const document = s.document ?? s.filename ?? s.name ?? docId
+                    const chunkId = s.chunkId ?? s.chunk_id ?? undefined
+                    const normalized = { label, docId, chunkId, pageStart, text, score, document }
+                    sourcesByLabel.set(label, normalized)
+                    return normalized
+                  })
                   break
+                }
                   
                 case 'END':
                   isComplete = true
                   data.onStreamingEnd?.()
                   ws.close()
+                  // Build SourceInfo[] for UI and index by docId
+                  const sourcesByDocId = new Map<string, any>()
+                  const chunkSources = (sources || []).map((s: any) => {
+                    if (s?.docId) sourcesByDocId.set(String(s.docId), s)
+                    return {
+                    document: s.document ?? s.docId ?? 'Unknown',
+                    content: s.text ?? s.content ?? '',
+                    score: typeof s.score === 'number' ? s.score : 0
+                    }
+                  })
+
+                  // Enrich citations with mapped source details
+                  const enrichedCitations: Citation[] = citations.map((c) => {
+                    let s = sourcesByLabel.get(c.chunk_index)
+                    if (!s && c.doc_id) {
+                      s = sourcesByDocId.get(String(c.doc_id))
+                    }
+                    return {
+                      chunk_index: c.chunk_index,
+                      doc_id: (s?.docId || c.doc_id || ''),
+                      doc_title: (s?.document || c.doc_title || s?.docId || c.doc_id || ''),
+                      page_number: (s?.pageStart ?? c.page_number),
+                      relevance_score: (typeof s?.score === 'number' ? s.score : c.relevance_score),
+                      content_preview: (s?.text || c.content_preview || '')
+                    }
+                  })
+
                   resolve({
                     answer,
-                    chunks: [], // Backend provides this via SOURCES
-                    citations,
+                    chunks: chunkSources, // normalized sources list
+                    citations: enrichedCitations,
                     complexity: 'moderate' as const,
                     query_id: turnId,
                     processing_time: message.stats?.ms || 0
@@ -256,36 +306,23 @@ export function useSubmitQuery() {
             }
           }
           
-          // Timeout after 120 seconds (extended for complex ML queries)
-          setTimeout(() => {
-            if (!isComplete) {
-              data.onStreamingEnd?.()
-              ws.close()
-              resolve({
-                answer: `Your complex query "${data.query}" is still processing after 2 minutes. For machine learning concept explanations, the system needs to:
-
-🔍 **Search Process:**
-- Scan all 26+ documents for ML-related content
-- Extract relevant concepts, algorithms, and explanations
-- Cross-reference technical details across multiple sources
-- Generate comprehensive explanations with proper citations
-
-💡 **Suggestions:**
-- Try more specific questions: "What ML algorithms are mentioned in the technical docs?"
-- Ask about specific documents: "Explain the ML pipeline in technical_doc.md"
-- Start with overview questions: "What technical topics are covered?"
-
-📊 **Session Details:** ${sessionId} | Processing time: 120+ seconds
-
-The backend may still be working on your request. Check http://localhost:3000 in a few moments to see if the response appears.`,
-                chunks: [],
-                citations: [],
-                complexity: 'complex' as const,
-                query_id: turnId,
-                processing_time: 120000
-              })
-            }
-          }, 120000) // Extended to 120 seconds (2 minutes)
+          // Optional timeout: only set if STREAM_TIMEOUT_MS > 0
+          if (STREAM_TIMEOUT_MS > 0) {
+            setTimeout(() => {
+              if (!isComplete) {
+                data.onStreamingEnd?.()
+                ws.close()
+                resolve({
+                  answer: `The query is still processing after ${Math.round(STREAM_TIMEOUT_MS/1000)} seconds. The connection was closed due to client timeout.`,
+                  chunks: [],
+                  citations: [],
+                  complexity: 'moderate' as const,
+                  query_id: turnId,
+                  processing_time: STREAM_TIMEOUT_MS
+                })
+              }
+            }, STREAM_TIMEOUT_MS)
+          }
         })
       } catch (error) {
         console.error('Query API error:', error)
