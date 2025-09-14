@@ -169,6 +169,14 @@ ollama pull qwen2.5:7b-instruct
 ```
 - On macOS/Windows, containers reach your host via `host.docker.internal` (preconfigured). On Linux, you may need to map the host gateway or expose Ollama differently.
 
+Persistence
+- Documents, parsed data, indices, and logs persist under `~/RAGApp` by default.
+- In Docker, the backend binds `~/RAGApp` into the container (`/app/data`) and Qdrant binds `~/RAGApp/qdrant_data`.
+- To change location, set `RAG_DATA_DIR` before `docker compose up`.
+
+Warning
+- Running `docker compose down -v` removes named volumes. With the new bind-mounts, data lives in your home folder and is not removed by `-v`. Do not delete `~/RAGApp` if you want to keep documents.
+
 ## 🧭 How To Use
 
 - Upload documents

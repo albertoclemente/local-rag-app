@@ -6,7 +6,7 @@ services:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - qdrant_data:/qdrant/storage
+      - ${RAG_DATA_DIR:-${HOME}/RAGApp}/qdrant_data:/qdrant/storage
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
@@ -27,7 +27,7 @@ services:
       # Use host.docker.internal to reach host's Ollama (macOS/Windows). On Linux, set to http://host.docker.internal:11434 and ensure gateway mapping or expose Ollama.
       - OLLAMA_HOST=http://host.docker.internal:11434
     volumes:
-      - backend_data:/app/data
+      - ${RAG_DATA_DIR:-${HOME}/RAGApp}:/app/data
     depends_on:
       - qdrant
     restart: unless-stopped
@@ -50,11 +50,7 @@ services:
     profiles:
       - full
 
-volumes:
-  qdrant_data:
-    driver: local
-  backend_data:
-    driver: local
+volumes: {}
 
 networks:
   default:
