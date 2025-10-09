@@ -40,9 +40,11 @@ dependencies = [
     # Document processing
     "PyPDF2>=3.0.0",
     "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
     "ebooklib>=0.18",
     "python-magic>=0.4.27",
     "chardet>=5.2.0",
+    "docling>=2.0.0",  # Advanced document to Markdown conversion
     
     # System monitoring
     "psutil>=5.9.0",

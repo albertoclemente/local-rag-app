@@ -33,6 +33,7 @@ except ImportError:
 from app.models import DocumentType
 from app.settings import get_settings
 from app.diagnostics import get_logger, performance_context
+from app.markdown_converter import get_markdown_converter, MarkdownConversionError
 
 logger = get_logger(__name__)
 
@@ -47,10 +48,12 @@ class DocumentParser:
     
     def __init__(self):
         self.settings = get_settings()
+        self.markdown_converter = get_markdown_converter()
     
     async def parse_document(self, file_path: Path, doc_type: DocumentType) -> Dict[str, Any]:
         """
         Parse a document and extract text content with metadata.
+        Attempts to convert to Markdown first using Docling for better structure preservation.
         
         Args:
             file_path: Path to the document file
@@ -62,6 +65,35 @@ class DocumentParser:
         with performance_context("parse_document", doc_type=doc_type.value):
             logger.info(f"Parsing document: {file_path.name} (type: {doc_type.value})")
             
+            # Try Docling conversion first if available and format is supported
+            if self.markdown_converter.is_available():
+                supported_formats = self.markdown_converter.get_supported_formats()
+                file_ext = file_path.suffix.lstrip('.').lower()
+                
+                if file_ext in supported_formats:
+                    try:
+                        logger.info(f"Attempting Docling conversion to Markdown for {file_path.name}")
+                        md_result = await self.markdown_converter.convert_to_markdown(file_path)
+                        
+                        # Convert Docling result to our standard format
+                        return {
+                            'document_type': doc_type.value,
+                            'total_pages': md_result.get('page_count', 0),
+                            'total_chars': md_result['char_count'],
+                            'total_words': md_result['word_count'],
+                            'metadata': md_result['metadata'],
+                            'full_text': md_result['markdown'],
+                            'markdown': md_result['markdown'],  # Keep markdown version
+                            'parsed_at': datetime.utcnow().isoformat(),
+                            'structure': md_result['structure'],
+                            'conversion_method': 'docling'
+                        }
+                    except MarkdownConversionError as e:
+                        logger.warning(f"Docling conversion failed, falling back to legacy parser: {e}")
+                    except Exception as e:
+                        logger.warning(f"Unexpected error in Docling conversion, falling back: {e}")
+            
+            # Fallback to legacy parsers
             try:
                 if doc_type == DocumentType.PDF:
                     return await self._parse_pdf(file_path)
@@ -73,6 +105,10 @@ class DocumentParser:
                     return await self._parse_markdown(file_path)
                 elif doc_type == DocumentType.EPUB:
                     return await self._parse_epub(file_path)
+                elif doc_type == DocumentType.HTML:
+                    return await self._parse_html(file_path)
+                elif doc_type == DocumentType.PPTX:
+                    return await self._parse_pptx(file_path)
                 else:
                     raise ParseError(f"Unsupported document type: {doc_type}")
                     
@@ -337,6 +373,69 @@ class DocumentParser:
         except Exception as e:
             raise ParseError(f"EPUB parsing error: {str(e)}")
     
+    async def _parse_html(self, file_path: Path) -> Dict[str, Any]:
+        """Parse HTML document (fallback method - Docling is preferred)"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                html_content = file.read()
+            
+            # Simple HTML to text conversion
+            text = self._html_to_text(html_content)
+            text = self._clean_text(text)
+            
+            return {
+                'document_type': 'html',
+                'total_chars': len(text),
+                'total_words': len(text.split()),
+                'metadata': {},
+                'full_text': text,
+                'parsed_at': datetime.utcnow().isoformat(),
+                'structure': self._analyze_structure(text),
+                'conversion_method': 'legacy'
+            }
+        except Exception as e:
+            raise ParseError(f"HTML parsing error: {str(e)}")
+    
+    async def _parse_pptx(self, file_path: Path) -> Dict[str, Any]:
+        """Parse PPTX document (fallback method - Docling is preferred)"""
+        try:
+            from pptx import Presentation
+            
+            prs = Presentation(file_path)
+            
+            slides_text = []
+            for slide_num, slide in enumerate(prs.slides, 1):
+                slide_text_parts = []
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        text = shape.text.strip()
+                        if text:
+                            slide_text_parts.append(text)
+                
+                if slide_text_parts:
+                    slides_text.append({
+                        'slide_number': slide_num,
+                        'text': '\n'.join(slide_text_parts)
+                    })
+            
+            full_text = '\n\n'.join(slide['text'] for slide in slides_text)
+            full_text = self._clean_text(full_text)
+            
+            return {
+                'document_type': 'pptx',
+                'total_slides': len(slides_text),
+                'total_chars': len(full_text),
+                'total_words': len(full_text.split()),
+                'metadata': {},
+                'slides': slides_text,
+                'full_text': full_text,
+                'parsed_at': datetime.utcnow().isoformat(),
+                'structure': self._analyze_structure(full_text),
+                'conversion_method': 'legacy'
+            }
+        except Exception as e:
+            raise ParseError(f"PPTX parsing error: {str(e)}")
+    
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text content"""
         if not text:
@@ -443,7 +542,7 @@ class DocumentParser:
     
     def get_supported_types(self) -> List[str]:
         """Get list of supported document types"""
-        supported = ['txt', 'md']
+        supported = ['txt', 'md', 'html', 'htm']
         
         if PDF_AVAILABLE:
             supported.append('pdf')
@@ -452,14 +551,41 @@ class DocumentParser:
         if EPUB_AVAILABLE:
             supported.append('epub')
         
+        # PPTX requires python-pptx
+        try:
+            import pptx
+            supported.append('pptx')
+        except ImportError:
+            pass
+        
+        # Add Docling-supported formats if available
+        if self.markdown_converter.is_available():
+            docling_formats = self.markdown_converter.get_supported_formats()
+            for fmt in docling_formats:
+                if fmt not in supported:
+                    supported.append(fmt)
+        
         return supported
     
     def detect_file_type(self, file_path: Path) -> Optional[DocumentType]:
         """Detect document type from file"""
         # First try by extension
         ext = file_path.suffix.lower().lstrip('.')
-        if ext in ['pdf', 'docx', 'txt', 'md', 'epub']:
-            return DocumentType(ext)
+        
+        # Direct extension mapping
+        ext_mapping = {
+            'pdf': DocumentType.PDF,
+            'docx': DocumentType.DOCX,
+            'txt': DocumentType.TXT,
+            'md': DocumentType.MD,
+            'epub': DocumentType.EPUB,
+            'html': DocumentType.HTML,
+            'htm': DocumentType.HTML,
+            'pptx': DocumentType.PPTX,
+        }
+        
+        if ext in ext_mapping:
+            return ext_mapping[ext]
         
         # Fall back to MIME type detection
         mime_type, _ = mimetypes.guess_type(str(file_path))
@@ -469,7 +595,9 @@ class DocumentParser:
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': DocumentType.DOCX,
                 'text/plain': DocumentType.TXT,
                 'text/markdown': DocumentType.MD,
-                'application/epub+zip': DocumentType.EPUB
+                'application/epub+zip': DocumentType.EPUB,
+                'text/html': DocumentType.HTML,
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation': DocumentType.PPTX,
             }
             return mime_to_type.get(mime_type)
         

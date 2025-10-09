@@ -16,6 +16,8 @@ class DocumentType(str, Enum):
     TXT = "txt"
     MD = "md"
     EPUB = "epub"
+    HTML = "html"
+    PPTX = "pptx"
 
 
 class DocumentStatus(str, Enum):
