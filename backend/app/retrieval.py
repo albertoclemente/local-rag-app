@@ -36,7 +36,9 @@ class RetrievalParams:
     """Parameters for retrieval configuration."""
     k_min: int = 3
     k_max: int = 10
-    score_threshold: float = 0.1  # Lowered from 0.7 for testing
+    # Minimum similarity threshold for chunks (cosine similarity)
+    # Balanced at 30% - filters very low relevance while keeping enough context
+    score_threshold: float = 0.3
     epsilon_gain: float = 0.05  # Minimum marginal gain to continue
     coverage_threshold: float = 0.85  # Stop when coverage plateaus
     budget_tokens: int = 4000  # Maximum context budget

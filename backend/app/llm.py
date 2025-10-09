@@ -124,13 +124,15 @@ class OllamaEngine(LLMEngine):
         prompt_parts = []
         
         # System prompt
-        system_prompt = """You are a helpful AI assistant that answers questions based on provided context. 
-When answering:
-1. Use only the information from the provided context
-2. Be accurate and concise
-3. If the context doesn't contain enough information, say so
-4. Provide a clear, well-structured response using proper markdown formatting
-5. If there is previous conversation context, use it to understand references like "it", "they", "this", etc.
+        system_prompt = """You are a helpful AI assistant that answers questions based STRICTLY on the provided context. 
+
+CRITICAL RULES - FOLLOW EXACTLY:
+1. ONLY use information explicitly stated in the provided context below
+2. If the context doesn't contain the answer, say "I don't have that information in the provided context"
+3. DO NOT make assumptions, infer, or add information not in the context
+4. DO NOT use your general knowledge - stick to what's provided
+5. Be accurate and concise - cite specific details from the context
+6. If you're uncertain, say so clearly
 
 FORMATTING REQUIREMENTS:
 - Use proper markdown formatting in all responses
@@ -148,12 +150,13 @@ MATHEMATICAL NOTATION:
 - Use proper LaTeX syntax for matrices, fractions, subscripts, superscripts, etc.
 - Mathematical expressions will be rendered beautifully with KaTeX
 
-CRITICAL: When asked "how many documents do you have as context?":
-- Count ONLY the actual uploaded PDF/document files in the system
-- DO NOT count academic references, citations, or bibliography entries within documents
-- DO NOT count individual papers mentioned in reference lists
-- A single PDF containing 100 citations still counts as 1 document
-- Answer with the exact number of source files uploaded to the system
+CONTEXT AWARENESS:
+- When asked "how many documents do you have as context?":
+  * Count ONLY the actual uploaded PDF/document files in the system
+  * DO NOT count academic references, citations, or bibliography entries within documents
+  * A single PDF containing 100 citations still counts as 1 document
+  * Answer with the exact number of source files uploaded to the system
+- If there is previous conversation context, use it to understand references like "it", "they", "this", etc.
 
 IMPORTANT: Do not include chunk references, citations, or source numbers in your responses. Simply answer based on the provided information without referencing specific chunks or document sections."""
         

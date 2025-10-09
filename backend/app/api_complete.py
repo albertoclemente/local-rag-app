@@ -84,10 +84,11 @@ async def upload_document(
             raise HTTPException(status_code=400, detail="No filename provided")
             
         file_ext = file.filename.split('.')[-1].lower()
-        if file_ext not in ['pdf', 'txt', 'docx', 'md', 'epub']:
+        supported_formats = parser.get_supported_types()
+        if file_ext not in supported_formats:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Unsupported file type: {file_ext}"
+                detail=f"Unsupported file type: {file_ext}. Supported: {', '.join(supported_formats)}"
             )
         
         # Parse tags
@@ -357,6 +358,21 @@ async def reindex_document(
                 
                 parsed_data["chunking"] = chunk_data
                 await storage.store_parsed_content(doc_id, parsed_data)
+                
+                # Embed and index the chunks
+                try:
+                    logger.info(f"Creating embeddings for {len(chunked_doc.chunks)} chunks...")
+                    chunk_dicts = [chunk.__dict__ for chunk in chunked_doc.chunks]
+                    embedded_chunks = await embed_chunks(chunk_dicts)
+                    
+                    # Index in Qdrant
+                    qdrant = await get_qdrant_service()
+                    await qdrant.index_chunks(embedded_chunks, doc_id)
+                    logger.info(f"Successfully indexed {len(embedded_chunks)} chunks into Qdrant")
+                except Exception as e:
+                    logger.error(f"Failed to embed/index chunks: {e}")
+                    raise
+                
                 await storage.update_document_metadata(doc_id, {
                     "status": "indexed",
                     "chunk_count": len(chunked_doc.chunks)

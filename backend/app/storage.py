@@ -88,7 +88,12 @@ class DocumentStorage:
         with performance_context("store_uploaded_file", filename=filename):
             # Determine file type
             file_ext = filename.split('.')[-1].lower()
-            if file_ext not in ['pdf', 'txt', 'docx', 'md', 'epub']:
+            # Allow all Docling-supported formats plus legacy formats
+            supported_formats = [
+                'pdf', 'txt', 'docx', 'md', 'epub', 'pptx', 'html', 'htm',
+                'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'asciidoc', 'adoc', 'doc'
+            ]
+            if file_ext not in supported_formats:
                 raise ValueError(f"Unsupported file type: {file_ext}")
             
             # Calculate file hash BEFORE storing to check for duplicates

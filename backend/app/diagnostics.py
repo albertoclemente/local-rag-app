@@ -197,12 +197,21 @@ def get_resource_monitor() -> ResourceMonitor:
 def log_performance(func_name: str, duration: float, **kwargs):
     """Log performance metrics for a function"""
     logger = get_logger("performance")
+    
+    # Rename reserved LogRecord attributes to avoid conflicts
+    safe_kwargs = {}
+    for key, value in kwargs.items():
+        if key in ('filename', 'lineno', 'funcName', 'module', 'pathname'):
+            safe_kwargs[f'context_{key}'] = value
+        else:
+            safe_kwargs[key] = value
+    
     logger.info(
         f"Function {func_name} completed",
         extra={
             "function": func_name,
             "duration_ms": duration * 1000,
-            **kwargs
+            **safe_kwargs
         }
     )
 

@@ -139,7 +139,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.txt,.md,.doc,.docx"
+          accept=".pdf,.txt,.md,.doc,.docx,.pptx,.html,.htm,.png,.jpg,.jpeg,.tiff,.bmp,.asciidoc,.adoc"
           onChange={handleFileSelect}
           className="hidden"
         />
