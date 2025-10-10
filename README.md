@@ -4,15 +4,17 @@ A completely local Retrieval-Augmented Generation (RAG) web app for document Q&A
 
 ## ✨ Features
 
-- 100% local: data never leaves your machine
-- Multi-format: PDF, DOCX, TXT, MD, EPUB
-- Smart RAG: adaptive chunking + dynamic-k retrieval
-- Streaming replies: live token streaming over WebSocket
-- Sources panel: see which documents informed each answer
-- Profiles: Eco / Balanced / Performance
-- Modern UI: Next.js (React + TypeScript)
+- **100% local**: data never leaves your machine
+- **Multi-format document support**: PDF, DOCX, PPTX, HTML, Images (with OCR) — auto-converted to Markdown via Docling
+- **Smart RAG**: adaptive chunking + dynamic-k retrieval
+- **Conversation memory**: LLM remembers last 5 turns (10 messages) for follow-up questions
+- **Conversation history**: SQLite-based persistence with auto-generated AI titles
+- **Streaming replies**: live token streaming over WebSocket
+- **Sources panel**: see which documents informed each answer with clickable citations
+- **Performance profiles**: Eco / Balanced / Performance
+- **Modern UI**: Next.js 15 with dark/light theme support
+- **Message persistence**: Keeps your prompts visible even when switching conversations during generation
 
-## � Simple Start (No Git Needed)
 ## Simple Start (No Git Needed — for non‑experts)
 
 No Git required: download the ZIP and run the one‑command script.
@@ -186,18 +188,37 @@ Migration
 
 ## 🧭 How To Use
 
-- Upload documents
-    - Use the Upload control in the UI to add PDF/DOCX/TXT/MD/EPUB files.
-    - The status bar shows indexing progress; the Documents list updates to “indexed”.
+### Upload documents
+- Click the "Upload" button in the UI to add documents
+- **Supported formats**: PDF, DOCX, PPTX, HTML, Images (PNG, JPG)
+- Documents are automatically converted to Markdown using Docling for better structure preservation
+- The status bar shows indexing progress; the Documents list updates to "indexed"
 
-- Ask questions
-    - Type queries in the chat input. Responses render with Markdown and KaTeX (math supported: inline $a^2+b^2=c^2$ or blocks with $$...$$).
+### Ask questions
+- Type queries in the chat input
+- Responses render with **Markdown** and **KaTeX** (math supported: inline `$a^2+b^2=c^2$` or blocks with `$$...$$`)
+- The LLM has **conversation memory** — it remembers your last 5 exchanges within the same session
+- Ask follow-up questions naturally: "What about X?" or "Can you explain that differently?"
 
-- View sources
-    - Toggle the sources panel with the “i” icon in the header to see which docs the answer used.
+### Manage conversations
+- **Conversation history**: All your conversations are saved in the left sidebar
+- **Auto-generated titles**: Each conversation gets an AI-generated title based on the first exchange
+- **Switch conversations**: Click any conversation to resume it — the LLM remembers the context
+- **New chat**: Click the "+ New Chat" button to start a fresh conversation
+- **Search**: Use the search bar in the sidebar to find past conversations
+- **Delete**: Hover over a conversation and click the trash icon to delete it
 
-- Model indicator
-    - The header shows the active LLM model name reported by the backend.
+### View sources
+- Toggle the sources panel with the "i" icon in the header
+- See which documents informed each answer with clickable citations
+- Citations show the relevant text chunk and similarity score
+
+### Theme
+- The UI supports both **light and dark themes**
+- All text, including chat messages and markdown content, is readable in both themes
+
+### Model indicator
+- The header shows the active LLM model name (default: Qwen 2.5 7B Instruct)
 
 ## 🛠️ Configuration
 
@@ -255,26 +276,40 @@ RAG_DEBUG=false
 ```
 RAG_APP/
 ├── backend/
-│   └── app/
-│       ├── main.py          # FastAPI app entry
-│       ├── api_complete.py  # REST endpoints (incl. /api/status)
-│       ├── ws.py            # WebSocket streaming
-│       ├── models.py        # Pydantic models
-│       ├── settings.py      # Config
-│       ├── storage.py       # File ops (uploads, parsed)
-│       ├── chunking.py      # Adaptive chunking
-│       ├── embeddings.py    # Local embeddings
-│       ├── qdrant_index.py  # Vector store ops
-│       ├── retrieval.py     # Retrieval logic
-│       └── llm.py           # LLM service
+│   ├── app/
+│   │   ├── main.py                 # FastAPI app entry
+│   │   ├── api_complete.py         # REST endpoints (/api/status, /api/query, etc.)
+│   │   ├── ws.py                   # WebSocket streaming
+│   │   ├── models.py               # Pydantic models
+│   │   ├── settings.py             # Configuration
+│   │   ├── storage.py              # File operations (uploads, parsed)
+│   │   ├── chunking.py             # Adaptive chunking
+│   │   ├── embeddings.py           # Local embeddings
+│   │   ├── qdrant_index.py         # Vector store operations
+│   │   ├── retrieval.py            # Retrieval logic
+│   │   ├── llm.py                  # LLM service
+│   │   ├── markdown_converter.py   # Docling integration for document conversion
+│   │   ├── conversation.py         # Conversation context management
+│   │   └── conversation_storage.py # SQLite-based conversation persistence
+│   └── data/
+│       └── conversations.db        # SQLite database for chat history
 ├── frontend/
 │   └── src/
-│       ├── components/      # UI components
-│       ├── hooks/           # React Query hooks
-│       ├── lib/             # API client & constants
-│       └── types/           # TypeScript types
+│       ├── components/
+│       │   ├── app-header.tsx           # Header with theme toggle
+│       │   ├── chat-view.tsx            # Main chat interface
+│       │   ├── conversation-history.tsx # Conversation sidebar
+│       │   ├── documents-panel.tsx      # Documents management
+│       │   └── status-bar.tsx           # Status indicator
+│       ├── hooks/
+│       │   └── api.ts                   # React Query hooks
+│       ├── lib/
+│       │   ├── api.ts                   # API client
+│       │   └── constants.ts             # Configuration
+│       └── types/
+│           └── index.ts                 # TypeScript types
 ├── docker/
-│   └── docker-compose.yml   # Qdrant (and optional backend) services
+│   └── docker-compose.yml          # Qdrant and optional full stack
 └── README.md
 ```
 
