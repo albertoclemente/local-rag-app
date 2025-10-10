@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { documentsApi, queryApi, systemApi } from '@/lib/api'
-import { WS_BASE_URL } from '@/lib/constants'
+import { WS_BASE_URL, API_BASE_URL } from '@/lib/constants'
 import type {
   Document,
   DocumentUploadRequest,
@@ -379,3 +379,94 @@ export function useHealthCheck() {
     staleTime: 10000,
   })
 }
+
+// Conversation History Hooks
+export const conversationKeys = {
+  all: ['conversations'] as const,
+  detail: (sessionId: string) => ['conversations', sessionId] as const,
+  stats: ['conversations', 'stats'] as const,
+}
+
+export function useConversations() {
+  return useQuery({
+    queryKey: conversationKeys.all,
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/api/conversations`)
+      if (!response.ok) throw new Error('Failed to fetch conversations')
+      return response.json()
+    },
+    staleTime: 30000, // 30 seconds
+  })
+}
+
+export function useConversationDetail(sessionId: string) {
+  return useQuery({
+    queryKey: conversationKeys.detail(sessionId),
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${sessionId}`)
+      if (!response.ok) throw new Error('Failed to fetch conversation')
+      return response.json()
+    },
+    enabled: !!sessionId,
+    refetchOnWindowFocus: false, // Don't refetch when switching tabs/windows to preserve optimistic UI
+  })
+}
+
+export function useDeleteConversation() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${sessionId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('Failed to delete conversation')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+      toast.success('Conversation deleted successfully')
+    },
+    onError: (error: any) => {
+      const message = extractErrorMessage(error) || 'Failed to delete conversation'
+      toast.error(message)
+    },
+  })
+}
+
+export function useConversationStats() {
+  return useQuery({
+    queryKey: conversationKeys.stats,
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/stats`)
+      if (!response.ok) throw new Error('Failed to fetch stats')
+      return response.json()
+    },
+    staleTime: 60000, // 1 minute
+  })
+}
+
+export function useGenerateConversationTitle() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${sessionId}/generate-title`, {
+        method: 'POST',
+      })
+      if (!response.ok) throw new Error('Failed to generate title')
+      return response.json()
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+      queryClient.invalidateQueries({ queryKey: conversationKeys.detail(data.session_id) })
+      toast.success('Title generated successfully')
+    },
+    onError: (error: any) => {
+      const message = extractErrorMessage(error) || 'Failed to generate title'
+      toast.error(message)
+    },
+  })
+}
+
+

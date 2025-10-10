@@ -36,15 +36,18 @@ api.interceptors.response.use(
   (response) => {
     return response
   },
-  (error) => {
+  (error: any) => {
     // Safely log error details
     const errorData = error.response?.data
     const errorMessage = error.message
     
     if (errorData && typeof errorData === 'object') {
+      // eslint-disable-next-line no-console
       console.error('API Response Error:', JSON.stringify(errorData, null, 2))
     } else {
-      console.error('API Response Error:', errorData || errorMessage)
+      const errorText = errorData !== undefined ? String(errorData) : String(errorMessage)
+      // eslint-disable-next-line no-console
+      console.error('API Response Error:', errorText)
     }
     
     return Promise.reject(error)

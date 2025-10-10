@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, User, Bot } from 'lucide-react'
-import { useSubmitQuery } from '@/hooks/api'
+import { useSubmitQuery, conversationKeys, useConversationDetail, useGenerateConversationTitle } from '@/hooks/api'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -12,19 +13,84 @@ import 'katex/dist/katex.min.css'
 import type { ChatMessage, StreamingQueryResponse, Citation, SourceInfo } from '@/types'
 
 interface ChatViewProps {
+  sessionId?: string
   onSourcesUpdate?: (sources: SourceInfo[], citations: Citation[]) => void
 }
 
-export function ChatView({ onSourcesUpdate }: ChatViewProps) {
+export function ChatView({ sessionId: externalSessionId, onSourcesUpdate }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
-  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => 
+    externalSessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  )
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isProcessingQuery = useRef(false) // Track if we're processing a query
+  const processingSessionId = useRef<string | null>(null) // Track which session is processing
+  const processingMessages = useRef<ChatMessage[]>([]) // Store messages for processing session
+  const processingStreamingContent = useRef<string>('') // Store streaming content
   
   const submitQuery = useSubmitQuery()
+  const queryClient = useQueryClient()
+  const generateTitle = useGenerateConversationTitle()
+  
+  // Update sessionId when externalSessionId changes, or create new one when undefined
+  useEffect(() => {
+    console.log('📌 Session change effect:', {
+      externalSessionId,
+      currentSessionId,
+      isProcessing: isProcessingQuery.current,
+      processingSession: processingSessionId.current
+    })
+    
+    if (externalSessionId) {
+      // Only clear if switching to a DIFFERENT existing session
+      if (externalSessionId !== currentSessionId) {
+        console.log('🔄 Switching to different session:', externalSessionId)
+        
+        // If we're switching FROM a processing session, save its state
+        if (isProcessingQuery.current && processingSessionId.current === currentSessionId) {
+          processingMessages.current = messages
+          processingStreamingContent.current = streamingContent
+          console.log('💾 Saved processing session state:', messages.length, 'messages')
+        }
+        
+        setCurrentSessionId(externalSessionId)
+        
+        // If we're switching TO the processing session, restore its state
+        if (processingSessionId.current === externalSessionId) {
+          console.log('⚡ Restoring processing session UI:', processingMessages.current.length, 'messages')
+          setMessages(processingMessages.current)
+          setStreamingContent(processingStreamingContent.current)
+          setIsStreaming(true)
+        } else {
+          // Normal session switch - clear everything
+          setMessages([])
+          setStreamingContent('')
+          setIsStreaming(false)
+        }
+        // DON'T reset processing flags - let them persist so the guard works when switching back
+      }
+    } else {
+      // Generate new session ID when externalSessionId becomes undefined (new chat)
+      const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      console.log('✨ Creating new chat session:', newSessionId)
+      setCurrentSessionId(newSessionId)
+      // Clear messages for new chat
+      setMessages([])
+      setStreamingContent('')
+      setIsStreaming(false)
+      // Only reset if starting a completely new chat (not switching between existing ones)
+      if (!isProcessingQuery.current) {
+        processingSessionId.current = null
+      }
+    }
+  }, [externalSessionId])
+  
+  // Load conversation history if sessionId is provided
+  const { data: conversationData } = useConversationDetail(currentSessionId)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -32,11 +98,66 @@ export function ChatView({ onSourcesUpdate }: ChatViewProps) {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, streamingContent])
+
+  // Load conversation history when data is fetched
+  useEffect(() => {
+    console.log('🔍 History load effect triggered:', {
+      isProcessing: isProcessingQuery.current,
+      processingSession: processingSessionId.current,
+      currentSession: currentSessionId,
+      conversationDataExists: !!conversationData,
+      turnCount: conversationData?.turn_count
+    })
+    
+    // Don't replace messages if we're currently processing a query for THIS session
+    if (isProcessingQuery.current && processingSessionId.current === currentSessionId) {
+      console.log('⏸️ Skipping history load - query in progress for this session')
+      return
+    }
+    
+    if (conversationData?.turns && conversationData.turns.length > 0) {
+      const loadedMessages: ChatMessage[] = []
+      conversationData.turns.forEach((turn: any) => {
+        // Add user message
+        loadedMessages.push({
+          id: `user-${turn.turn_id}`,
+          role: 'user',
+          content: turn.query,
+          timestamp: turn.timestamp
+        })
+        // Add assistant message
+        loadedMessages.push({
+          id: `assistant-${turn.turn_id}`,
+          role: 'assistant',
+          content: turn.response,
+          timestamp: turn.timestamp,
+          citations: turn.sources || []
+        })
+      })
+      
+      // Only update if loaded messages count is different from current
+      if (loadedMessages.length !== messages.length) {
+        console.log('📥 Loading conversation history:', loadedMessages.length, 'messages')
+        setMessages(loadedMessages)
+      }
+    } else if (conversationData && conversationData.turn_count === 0) {
+      // Session exists but has no turns yet - don't clear existing messages
+      console.log('Session exists with no turns, keeping current messages')
+    }
+  }, [conversationData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || submitQuery.isPending) return
+
+    // Check if this is the first message BEFORE adding it
+    const isFirstMessage = messages.length === 0
+    
+    // Mark that we're processing a query for this session
+    isProcessingQuery.current = true
+    processingSessionId.current = currentSessionId
+    console.log('🚀 Starting query processing for session:', currentSessionId)
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -51,12 +172,17 @@ export function ChatView({ onSourcesUpdate }: ChatViewProps) {
     setIsStreaming(true)
     setStreamingContent('')
 
+    // Invalidate conversations cache
+    queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+
     try {
       const response = await submitQuery.mutateAsync({
         query: queryText,
-        sessionId: sessionId,
+        sessionId: currentSessionId,
         onStreamingStart: () => {
           console.log('🚀 Streaming started')
+          // Refetch conversations now that session is confirmed created
+          queryClient.refetchQueries({ queryKey: conversationKeys.all })
         },
         onStreamToken: (token: string) => {
           setStreamingContent(prev => prev + token)
@@ -89,6 +215,33 @@ export function ChatView({ onSourcesUpdate }: ChatViewProps) {
         onSourcesUpdate(response.chunks || [], response.citations || [])
         console.log('📡 ChatView: Called onSourcesUpdate with:', response.chunks?.length, 'sources and', response.citations?.length, 'citations')
       }
+
+      // Invalidate conversations cache again to update turn count
+      queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+      
+      // Auto-generate title after first turn
+      console.log('🔍 Checking auto-title conditions:', { 
+        isFirstMessage, 
+        messagesLength: messages.length,
+        currentSessionId 
+      })
+      
+      if (isFirstMessage) {
+        console.log('🎯 This is the first message! Auto-generating title for:', currentSessionId)
+        // Add a delay to ensure the turn is saved to backend first
+        setTimeout(async () => {
+          try {
+            console.log('⏱️ Attempting to generate title now...')
+            const result = await generateTitle.mutateAsync(currentSessionId)
+            console.log('✅ Title generated successfully:', result)
+          } catch (error) {
+            console.error('❌ Failed to auto-generate title:', error)
+            // Don't block user on title generation failure
+          }
+        }, 3000) // 3 seconds to ensure backend saves the turn
+      } else {
+        console.log('❌ Not first message, skipping auto-title. messagesLength:', messages.length)
+      }
     } catch (error) {
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
@@ -100,6 +253,12 @@ export function ChatView({ onSourcesUpdate }: ChatViewProps) {
     } finally {
       setIsStreaming(false)
       setStreamingContent('')
+      // Mark query processing as complete
+      console.log('✅ Query processing complete for session:', currentSessionId)
+      isProcessingQuery.current = false
+      processingSessionId.current = null
+      processingMessages.current = []
+      processingStreamingContent.current = ''
     }
   }
 
@@ -121,7 +280,7 @@ export function ChatView({ onSourcesUpdate }: ChatViewProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Bot className="h-12 w-12 text-gray-400 mb-4" />
@@ -148,21 +307,21 @@ export function ChatView({ onSourcesUpdate }: ChatViewProps) {
                 <div className="flex-1">
                   <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
                     {streamingContent ? (
-                      <div className="prose prose-sm max-w-none text-black">
+                      <div className="prose prose-sm max-w-none text-gray-900 dark:text-gray-100">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm, remarkMath]}
                           rehypePlugins={[rehypeKatex]}
                           components={{
-                            p: ({ children }) => <p className="mb-2 last:mb-0 text-black">{children}</p>,
-                            strong: ({ children }) => <strong className="font-bold text-black">{children}</strong>,
-                            ul: ({ children }) => <ul className="list-disc pl-4 mb-2 text-black">{children}</ul>,
-                            ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 text-black">{children}</ol>,
-                            li: ({ children }) => <li className="mb-1 text-black">{children}</li>,
-                            h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-black">{children}</h1>,
-                            h2: ({ children }) => <h2 className="text-lg font-bold mb-2 text-black">{children}</h2>,
-                            h3: ({ children }) => <h3 className="text-base font-bold mb-2 text-black">{children}</h3>,
-                            code: ({ children }) => <code className="bg-gray-100 px-1 rounded text-black font-mono text-sm">{children}</code>,
-                            blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700">{children}</blockquote>
+                            p: ({ children }) => <p className="mb-2 last:mb-0 text-gray-900 dark:text-gray-100">{children}</p>,
+                            strong: ({ children }) => <strong className="font-bold text-gray-900 dark:text-gray-100">{children}</strong>,
+                            ul: ({ children }) => <ul className="list-disc pl-4 mb-2 text-gray-900 dark:text-gray-100">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 text-gray-900 dark:text-gray-100">{children}</ol>,
+                            li: ({ children }) => <li className="mb-1 text-gray-900 dark:text-gray-100">{children}</li>,
+                            h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-gray-900 dark:text-gray-100">{children}</h1>,
+                            h2: ({ children }) => <h2 className="text-lg font-bold mb-2 text-gray-900 dark:text-gray-100">{children}</h2>,
+                            h3: ({ children }) => <h3 className="text-base font-bold mb-2 text-gray-900 dark:text-gray-100">{children}</h3>,
+                            code: ({ children }) => <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-gray-900 dark:text-gray-100 font-mono text-sm">{children}</code>,
+                            blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-700 dark:text-gray-300">{children}</blockquote>
                           }}
                         >
                           {streamingContent}
@@ -195,8 +354,7 @@ export function ChatView({ onSourcesUpdate }: ChatViewProps) {
               onKeyDown={handleKeyDown}
               placeholder="Ask a question about your documents..."
               rows={1}
-              className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32"
-              style={{ color: '#000000' }}
+              className="w-full resize-none border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32 placeholder:text-gray-500 dark:placeholder:text-gray-400"
               disabled={submitQuery.isPending}
             />
           </div>
@@ -264,21 +422,21 @@ function MessageBubble({ message }: MessageBubbleProps) {
               ))
             ) : (
               // For assistant messages, render markdown
-              <div className="text-black">
+              <div className="text-gray-900 dark:text-gray-100">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkMath]}
                   rehypePlugins={[rehypeKatex]}
                   components={{
-                    p: ({ children }) => <p className="mb-2 last:mb-0 text-black">{children}</p>,
-                    strong: ({ children }) => <strong className="font-bold text-black">{children}</strong>,
-                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2 text-black">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 text-black">{children}</ol>,
-                    li: ({ children }) => <li className="mb-1 text-black">{children}</li>,
-                    h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-black">{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-lg font-bold mb-2 text-black">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-base font-bold mb-2 text-black">{children}</h3>,
-                    code: ({ children }) => <code className="bg-gray-100 px-1 rounded text-black font-mono text-sm">{children}</code>,
-                    blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700">{children}</blockquote>
+                    p: ({ children }) => <p className="mb-2 last:mb-0 text-gray-900 dark:text-gray-100">{children}</p>,
+                    strong: ({ children }) => <strong className="font-bold text-gray-900 dark:text-gray-100">{children}</strong>,
+                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2 text-gray-900 dark:text-gray-100">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 text-gray-900 dark:text-gray-100">{children}</ol>,
+                    li: ({ children }) => <li className="mb-1 text-gray-900 dark:text-gray-100">{children}</li>,
+                    h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-gray-900 dark:text-gray-100">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-lg font-bold mb-2 text-gray-900 dark:text-gray-100">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-base font-bold mb-2 text-gray-900 dark:text-gray-100">{children}</h3>,
+                    code: ({ children }) => <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-gray-900 dark:text-gray-100 font-mono text-sm">{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-700 dark:text-gray-300">{children}</blockquote>
                   }}
                 >
                   {message.content || ''}

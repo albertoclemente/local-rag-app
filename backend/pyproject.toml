@@ -44,7 +44,7 @@ dependencies = [
     "ebooklib>=0.18",
     "python-magic>=0.4.27",
     "chardet>=5.2.0",
-    "docling>=2.0.0",  # Advanced document to Markdown conversion
+    "docling>=2.0.0,<2.10.0",  # Pin to earlier version to avoid dependency conflicts
     
     # System monitoring
     "psutil>=5.9.0",

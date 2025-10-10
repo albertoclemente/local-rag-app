@@ -107,7 +107,7 @@ export function AppHeader({ onToggleSources, sourcesOpen }: AppHeaderProps) {
               ? 'bg-blue-100 text-blue-600'
               : 'text-gray-500 hover:bg-gray-100'
           )}
-          title="Toggle Sources Panel"
+          title="Toggle Documents Panel"
         >
           <Info className="h-5 w-5" />
         </button>

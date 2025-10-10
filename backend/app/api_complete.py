@@ -420,6 +420,11 @@ async def start_query(
     try:
         logger.info(f"Starting query: {query_request.query}")
         
+        # Create or get the session immediately so it appears in the sidebar
+        conversation_mgr = get_conversation_manager()
+        conversation_mgr.get_or_create_session(query_request.session_id)
+        logger.info(f"Session created/retrieved: {query_request.session_id}")
+        
         # Generate a turn ID for this specific query
         turn_id = str(uuid.uuid4())
         
@@ -582,3 +587,171 @@ async def cleanup_old_sessions():
     conversation_mgr = get_conversation_manager()
     conversation_mgr.cleanup_old_sessions()
     return {"message": "Old sessions cleaned up"}
+
+# ============================================================================
+# Conversation History Endpoints
+# ============================================================================
+
+@router.get("/conversations")
+async def get_all_conversations(
+    limit: Optional[int] = Query(None, description="Limit number of results"),
+    order: str = Query("last_active DESC", description="Sort order")
+):
+    """
+    Get all conversation sessions.
+    
+    - **limit**: Optional limit on number of sessions to return
+    - **order**: SQL ORDER BY clause (e.g., "last_active DESC", "created_at ASC")
+    
+    Returns list of all conversation sessions with metadata.
+    """
+    try:
+        conversation_mgr = get_conversation_manager()
+        sessions = conversation_mgr.get_all_sessions()
+        
+        # Apply limit if specified
+        if limit:
+            sessions = sessions[:limit]
+        
+        return {
+            "sessions": sessions,
+            "total_count": len(sessions)
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving conversations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/conversations/stats")
+async def get_conversation_stats():
+    """
+    Get statistics about stored conversations.
+    
+    Returns database statistics including total sessions, turns, and activity.
+    """
+    try:
+        conversation_mgr = get_conversation_manager()
+        stats = conversation_mgr.get_storage_stats()
+        
+        return stats
+    except Exception as e:
+        logger.error(f"Error retrieving conversation stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/conversations/search/{query}")
+async def search_conversations(
+    query: str,
+    limit: int = Query(50, description="Maximum number of results")
+):
+    """
+    Search across all conversations for matching text.
+    
+    - **query**: Text to search for in queries and responses
+    - **limit**: Maximum number of results to return
+    
+    Returns matching conversation turns.
+    """
+    try:
+        conversation_mgr = get_conversation_manager()
+        results = conversation_mgr.search_conversations(query, limit)
+        
+        return {
+            "query": query,
+            "results": results,
+            "result_count": len(results)
+        }
+    except Exception as e:
+        logger.error(f"Error searching conversations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/conversations/{session_id}")
+async def get_conversation_detail(session_id: str):
+    """
+    Get detailed conversation history for a specific session.
+    
+    - **session_id**: Session identifier
+    
+    Returns session info and all conversation turns with sources.
+    """
+    try:
+        conversation_mgr = get_conversation_manager()
+        
+        # Get session info
+        session_info = conversation_mgr.get_session_info(session_id)
+        if not session_info:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
+        # Get all turns
+        turns = conversation_mgr.get_session_turns(session_id)
+        
+        return {
+            "session": session_info,
+            "turns": turns or [],
+            "turn_count": len(turns) if turns else 0
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving conversation {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/conversations/{session_id}")
+async def delete_conversation(session_id: str):
+    """
+    Delete a conversation session and all its history.
+    
+    - **session_id**: Session to delete
+    
+    Returns confirmation of deletion.
+    """
+    try:
+        conversation_mgr = get_conversation_manager()
+        deleted = conversation_mgr.clear_session_context(session_id)
+        
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
+        return {
+            "message": "Conversation deleted successfully",
+            "session_id": session_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting conversation {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/conversations/{session_id}/generate-title")
+async def generate_conversation_title(session_id: str):
+    """
+    Generate an AI-powered title for a conversation based on its content.
+    
+    - **session_id**: Session to generate title for
+    
+    Returns the generated title.
+    """
+    try:
+        conversation_mgr = get_conversation_manager()
+        llm_service = await get_llm_service()
+        
+        # Check if session exists
+        session = conversation_mgr.storage.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
+        # Generate title
+        title = await conversation_mgr.generate_title_for_session(session_id, llm_service)
+        
+        if not title:
+            raise HTTPException(status_code=500, detail="Failed to generate title")
+        
+        return {
+            "session_id": session_id,
+            "title": title
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating title for conversation {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
