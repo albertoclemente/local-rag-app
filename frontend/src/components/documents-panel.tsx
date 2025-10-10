@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useDocuments, useUploadDocument } from '@/hooks/api'
+import { useDocuments, useUploadDocument, useDeleteDocument } from '@/hooks/api'
 import { FileText, Upload, Search, Tag, MoreVertical, Trash2, RefreshCw, Plus, X } from 'lucide-react'
 import { cn, formatFileSize, formatTimestamp } from '@/lib/utils'
 import type { Document } from '@/types'
@@ -200,12 +200,26 @@ interface DocumentCardProps {
 
 function DocumentCard({ document }: DocumentCardProps) {
   const [showActions, setShowActions] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const deleteDocument = useDeleteDocument()
+
+  const handleDelete = async () => {
+    try {
+      await deleteDocument.mutateAsync(document.id)
+      setShowDeleteConfirm(false)
+    } catch (error) {
+      console.error('Delete failed:', error)
+    }
+  }
 
   return (
     <div
-      className="p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all group"
+      className="p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all group relative"
       onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      onMouseLeave={() => {
+        setShowActions(false)
+        setShowDeleteConfirm(false)
+      }}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -250,12 +264,39 @@ function DocumentCard({ document }: DocumentCardProps) {
         </div>
         
         {showActions && (
-          <button
-            className="p-1 text-gray-400 hover:text-gray-600 ml-2"
-            aria-label="Document actions"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
+          <div className="relative ml-2">
+            <button
+              onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
+              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+              aria-label="Delete document"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+
+            {showDeleteConfirm && (
+              <div className="absolute right-0 top-0 z-10 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-lg shadow-lg p-3 w-64">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Delete this document?</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                  This will delete the file and all associated chunks and vectors. This action cannot be undone.
+                </p>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteDocument.isPending}
+                    className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded transition-colors"
+                  >
+                    {deleteDocument.isPending ? 'Deleting...' : 'Delete'}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

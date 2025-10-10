@@ -268,7 +268,8 @@ async def update_document(
 async def delete_document(
     doc_id: str,
     secure: bool = Query(False, description="Secure delete (overwrite)"),
-    storage=Depends(get_document_storage_service)
+    storage=Depends(get_document_storage_service),
+    qdrant=Depends(get_qdrant_service)
 ) -> JSONResponse:
     """
     Delete a document and its embeddings.
@@ -279,9 +280,18 @@ async def delete_document(
     try:
         logger.info(f"Deleting document {doc_id}, secure: {secure}")
         
+        # Delete file and metadata
         success = await storage.delete_document(doc_id, secure=secure)
         if not success:
             raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Delete vectors from Qdrant
+        try:
+            deleted_chunks = await qdrant.delete_document_chunks(doc_id)
+            logger.info(f"Deleted {deleted_chunks} vector chunks for document {doc_id}")
+        except Exception as e:
+            logger.warning(f"Error deleting vectors for document {doc_id}: {e}")
+            # Continue even if vector deletion fails - file is already deleted
         
         return JSONResponse(
             content={"message": f"Document {doc_id} deleted successfully"},
