@@ -9,7 +9,10 @@ import type {
   QueryResponse,
   StreamingQueryResponse,
   Citation,
-  Settings
+  Settings,
+  CategoryInfo,
+  CategoryStatistics,
+  DocumentCategorizeRequest
 } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -20,6 +23,8 @@ export const queryKeys = {
   systemStatus: ['system', 'status'] as const,
   settings: ['system', 'settings'] as const,
   health: ['system', 'health'] as const,
+  categories: ['categories'] as const,
+  categoryStats: ['categories', 'statistics'] as const,
 }
 
 // Helper function to extract error message
@@ -468,5 +473,105 @@ export function useGenerateConversationTitle() {
     },
   })
 }
+
+// Category Management Hooks
+export function useCategories() {
+  return useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/api/categories`)
+      if (!response.ok) throw new Error('Failed to fetch categories')
+      return response.json() as Promise<{ categories: CategoryInfo[], totalCategories: number }>
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes - categories don't change often
+  })
+}
+
+export function useCategoryStatistics() {
+  return useQuery({
+    queryKey: queryKeys.categoryStats,
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/api/categories/statistics`)
+      if (!response.ok) throw new Error('Failed to fetch category statistics')
+      return response.json() as Promise<CategoryStatistics>
+    },
+    staleTime: 60000, // 1 minute
+  })
+}
+
+export function useCategorizeDocument() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ 
+      docId, 
+      force = false 
+    }: { 
+      docId: string
+      force?: boolean 
+    }) => {
+      const response = await fetch(`${API_BASE_URL}/api/documents/${docId}/categorize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ force }),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to categorize document')
+      }
+      return response.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents })
+      queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.docId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.categoryStats })
+      toast.success('Document categorized successfully')
+    },
+    onError: (error: any) => {
+      const message = extractErrorMessage(error) || 'Failed to categorize document'
+      toast.error(message)
+    },
+  })
+}
+
+export function useUpdateDocumentCategories() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ 
+      docId, 
+      categories 
+    }: { 
+      docId: string
+      categories: string[] 
+    }) => {
+      const response = await fetch(`${API_BASE_URL}/api/documents/${docId}/categories`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ categories }),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to update categories')
+      }
+      return response.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents })
+      queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.docId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.categoryStats })
+      toast.success('Categories updated successfully')
+    },
+    onError: (error: any) => {
+      const message = extractErrorMessage(error) || 'Failed to update categories'
+      toast.error(message)
+    },
+  })
+}
+
 
 

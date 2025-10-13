@@ -1,8 +1,16 @@
 // API Base URL
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Support both NEXT_PUBLIC_API_BASE_URL and NEXT_PUBLIC_API_URL for flexibility
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000'
 
 // WebSocket URL for streaming
-export const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
+// Support both NEXT_PUBLIC_WS_BASE_URL and NEXT_PUBLIC_WS_URL
+export const WS_BASE_URL =
+  process.env.NEXT_PUBLIC_WS_BASE_URL ||
+  process.env.NEXT_PUBLIC_WS_URL ||
+  'ws://localhost:8000'
 
 // Supported file types for upload
 export const SUPPORTED_FILE_TYPES = [

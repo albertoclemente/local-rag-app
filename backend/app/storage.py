@@ -219,10 +219,30 @@ class DocumentStorage:
         if not document:
             return None
         
-        # Apply updates
+        # Apply updates with minimal coercion for enums and datetimes
+        from datetime import datetime
+        from app.models import DocumentStatus, EmbeddingStatus
         for key, value in updates.items():
-            if hasattr(document, key):
-                setattr(document, key, value)
+            if not hasattr(document, key):
+                continue
+            # Coerce enums if string provided
+            if key == "status" and isinstance(value, str):
+                try:
+                    value = DocumentStatus(value)
+                except Exception:
+                    pass
+            if key == "embedding_status" and isinstance(value, str):
+                try:
+                    value = EmbeddingStatus(value)
+                except Exception:
+                    pass
+            # Coerce datetimes if ISO string
+            if key in {"added_at", "category_generated_at"} and isinstance(value, str):
+                try:
+                    value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except Exception:
+                    value = datetime.utcnow()
+            setattr(document, key, value)
         
         # Keep original file hash
         metadata_path = self._get_document_metadata_path(doc_id)
@@ -238,7 +258,8 @@ class DocumentStorage:
     async def list_documents(
         self, 
         tag_filter: Optional[str] = None,
-        status_filter: Optional[str] = None
+        status_filter: Optional[str] = None,
+        category_filter: Optional[str] = None
     ) -> List[Document]:
         """List all documents with optional filters"""
         documents = []
@@ -253,6 +274,8 @@ class DocumentStorage:
                 if tag_filter and tag_filter not in document.tags:
                     continue
                 if status_filter and document.status != status_filter:
+                    continue
+                if category_filter and category_filter not in document.categories:
                     continue
                 
                 documents.append(document)

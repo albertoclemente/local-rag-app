@@ -19,6 +19,12 @@ from app.models import (
     DocumentReindexRequest,
     DocumentUploadResponse,
     DocumentType,
+    DocumentStatus,
+    EmbeddingStatus,
+    DocumentCategorizeRequest,
+    DocumentUpdateCategoriesRequest,
+    CategoryListResponse,
+    CategoryStatistics,
     QueryRequest,
     QueryResponse,
     Settings,
@@ -115,6 +121,47 @@ async def upload_document(
                 parsed_data = await parser.parse_document(raw_file_path, document.type)
                 await storage.store_parsed_content(document.id, parsed_data)
                 
+                # AI-powered categorization (after parsing, before chunking)
+                try:
+                    from app.categorization import categorize_document
+                    logger.info(f"Categorizing document: {document.name}")
+                    
+                    categorization_result = await categorize_document(
+                        parsed_content=parsed_data,
+                        doc_name=document.name
+                    )
+                    
+                    # Update document with categories
+                    # Coerce generated_at to datetime if needed
+                    gen_at = categorization_result.get("generated_at")
+                    from datetime import datetime
+                    if isinstance(gen_at, str):
+                        try:
+                            # Try parsing common ISO format
+                            gen_at = datetime.fromisoformat(gen_at.replace("Z", "+00:00"))
+                        except Exception:
+                            gen_at = datetime.utcnow()
+
+                    await storage.update_document_metadata(
+                        document.id,
+                        {
+                            "categories": categorization_result.get("categories", []),
+                            "category_confidence": categorization_result.get("confidence"),
+                            "category_generated_at": gen_at,
+                            "category_method": categorization_result.get("method", "auto"),
+                            "category_language": categorization_result.get("language"),
+                            "category_subcategories": categorization_result.get("subcategories", {})
+                        }
+                    )
+                    
+                    logger.info(
+                        f"Document categorized: {document.name} -> {categorization_result.get('categories')}"
+                    )
+                    
+                except Exception as cat_error:
+                    logger.warning(f"Failed to categorize document {document.id}: {cat_error}")
+                    # Continue processing even if categorization fails
+                
                 # Chunk the document
                 chunker = await get_chunking_service()
                 doc_type_str = parsed_data.get('document_type', 'txt')
@@ -155,8 +202,8 @@ async def upload_document(
                     await storage.update_document_metadata(
                         document.id, 
                         {
-                            "status": "indexed", 
-                            "embedding_status": "indexed",
+                            "status": DocumentStatus.INDEXED, 
+                            "embedding_status": EmbeddingStatus.INDEXED,
                             "chunk_count": len(chunked_doc.chunks)
                         }
                     )
@@ -168,13 +215,13 @@ async def upload_document(
                     await storage.update_document_metadata(
                         document.id, 
                         {
-                            "status": "indexed", 
-                            "embedding_status": "error",
+                            "status": DocumentStatus.INDEXED,
+                            "embedding_status": EmbeddingStatus.ERROR,
                             "chunk_count": len(chunked_doc.chunks)
                         }
                     )
                 
-                document.status = "indexed"  # type: ignore
+                document.status = DocumentStatus.INDEXED  # type: ignore
                 
                 logger.info(
                     f"Document processed successfully: {document.id} "
@@ -188,6 +235,14 @@ async def upload_document(
             )
         
         logger.info(f"Document uploaded successfully: {document.id}")
+        # Reload updated document metadata before returning (to include categories, status, etc.)
+        try:
+            latest = await storage.load_document_metadata(document.id)
+            if latest:
+                document = latest
+        except Exception as _reload_err:
+            logger.warning(f"Could not reload updated document {document.id}: {_reload_err}")
+
         return DocumentUploadResponse(document=document)
         
     except Exception as e:
@@ -407,6 +462,221 @@ async def reindex_document(
         raise
     except Exception as e:
         logger.error(f"Error reindexing document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/{doc_id}/categorize")
+async def categorize_document_endpoint(
+    doc_id: str,
+    categorize_request: DocumentCategorizeRequest,
+    storage=Depends(get_document_storage_service)
+) -> JSONResponse:
+    """
+    Manually trigger AI categorization for a document.
+    
+    - **doc_id**: Document ID
+    - **force**: Force re-categorization even if already categorized
+    """
+    try:
+        from app.categorization import categorize_document
+        
+        logger.info(f"Manual categorization requested for document {doc_id}")
+        
+        # Check if document exists
+        document = await storage.load_document_metadata(doc_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check if already categorized (unless force=True)
+        if document.categories and not categorize_request.force:
+            return JSONResponse(
+                content={
+                    "message": "Document already categorized",
+                    "categories": document.categories,
+                    "confidence": document.category_confidence
+                },
+                status_code=200
+            )
+        
+        # Load parsed content
+        parsed_data = await storage.load_parsed_content(doc_id)
+        if not parsed_data:
+            raise HTTPException(status_code=400, detail="Document not yet parsed")
+        
+        # Categorize
+        categorization_result = await categorize_document(
+            parsed_content=parsed_data,
+            doc_name=document.name,
+            force_recategorize=categorize_request.force
+        )
+        
+        # Update document metadata
+        await storage.update_document_metadata(
+            doc_id,
+            {
+                "categories": categorization_result.get("categories", []),
+                "category_confidence": categorization_result.get("confidence"),
+                # categorization_result["generated_at"] is now a datetime
+                "category_generated_at": categorization_result.get("generated_at"),
+                "category_method": categorization_result.get("method", "manual"),
+                "category_language": categorization_result.get("language"),
+                "category_subcategories": categorization_result.get("subcategories", {})
+            }
+        )
+        
+        logger.info(f"Document categorized: {doc_id} -> {categorization_result.get('categories')}")
+        
+        return JSONResponse(
+            content={
+                "message": "Document categorized successfully",
+                "categories": categorization_result.get("categories"),
+                "subcategories": categorization_result.get("subcategories"),
+                "confidence": categorization_result.get("confidence"),
+                "language": categorization_result.get("language"),
+                "method": categorization_result.get("method")
+            },
+            status_code=200
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error categorizing document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/documents/{doc_id}/categories")
+async def update_document_categories(
+    doc_id: str,
+    update_request: DocumentUpdateCategoriesRequest,
+    storage=Depends(get_document_storage_service)
+) -> JSONResponse:
+    """
+    Manually update document categories (override AI categorization).
+    
+    - **doc_id**: Document ID
+    - **categories**: List of category names (1-5 categories)
+    """
+    try:
+        from app.categorization import get_category_list
+        from datetime import datetime
+        
+        logger.info(f"Manual category update for document {doc_id}: {update_request.categories}")
+        
+        # Check if document exists
+        document = await storage.load_document_metadata(doc_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Validate categories
+        valid_categories = get_category_list()
+        invalid_categories = [cat for cat in update_request.categories if cat not in valid_categories]
+        
+        if invalid_categories:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid categories: {invalid_categories}. Valid categories: {valid_categories}"
+            )
+        
+        # Update document metadata
+        await storage.update_document_metadata(
+            doc_id,
+            {
+                "categories": update_request.categories,
+                "category_confidence": 1.0,  # Manual = 100% confidence
+                "category_generated_at": datetime.utcnow().isoformat(),
+                "category_method": "manual"
+            }
+        )
+        
+        logger.info(f"Categories updated manually for {doc_id}: {update_request.categories}")
+        
+        return JSONResponse(
+            content={
+                "message": "Categories updated successfully",
+                "categories": update_request.categories
+            },
+            status_code=200
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating categories for document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/categories", response_model=CategoryListResponse)
+async def get_categories(
+    storage=Depends(get_document_storage_service)
+) -> CategoryListResponse:
+    """
+    Get list of all available categories with metadata and document counts.
+    """
+    try:
+        from app.categorization import CATEGORY_HIERARCHY, get_category_info
+        
+        # Get all documents to count per category
+        documents = await storage.list_documents()
+        
+        # Count documents per category
+        category_counts = {}
+        for doc in documents:
+            for category in doc.categories:
+                category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # Build category list with metadata
+        categories = []
+        for cat_name, cat_info in CATEGORY_HIERARCHY.items():
+            categories.append({
+                "name": cat_name,
+                "icon": cat_info.get("icon", "📄"),
+                "description": cat_info.get("description", ""),
+                "subcategories": cat_info.get("subcategories", []),
+                "document_count": category_counts.get(cat_name, 0)
+            })
+        
+        return CategoryListResponse(
+            categories=categories,
+            total_categories=len(categories)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/categories/statistics", response_model=CategoryStatistics)
+async def get_category_statistics(
+    storage=Depends(get_document_storage_service)
+) -> CategoryStatistics:
+    """
+    Get detailed statistics about document categorization.
+    """
+    try:
+        from app.categorization import get_category_statistics
+        
+        # Get all documents
+        documents = await storage.list_documents()
+        
+        # Convert documents to dict format expected by statistics function
+        doc_dicts = []
+        for doc in documents:
+            doc_dict = {
+                "categories": doc.categories,
+                "category_confidence": doc.category_confidence,
+                "category_language": doc.category_language,
+                "category_method": doc.category_method
+            }
+            doc_dicts.append(doc_dict)
+        
+        # Calculate statistics
+        stats = get_category_statistics(doc_dicts)
+        
+        return CategoryStatistics(**stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting category statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

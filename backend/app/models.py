@@ -66,6 +66,14 @@ class Document(BaseModel):
     last_indexed: Optional[float] = Field(alias="lastIndexed", default=None)
     chunk_params: Optional[Dict[str, Any]] = None
     chunk_count: int = Field(alias="chunkCount", default=0)
+    
+    # AI-powered categorization fields
+    categories: List[str] = Field(default_factory=list)
+    category_confidence: Optional[float] = Field(alias="categoryConfidence", default=None)
+    category_generated_at: Optional[datetime] = Field(alias="categoryGeneratedAt", default=None)
+    category_method: str = Field(alias="categoryMethod", default="auto")  # "auto", "manual", "llm", "keyword"
+    category_language: Optional[str] = Field(alias="categoryLanguage", default=None)
+    category_subcategories: Dict[str, List[str]] = Field(alias="categorySubcategories", default_factory=dict)
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -99,6 +107,46 @@ class DocumentReindexRequest(BaseModel):
     chunk_size: Optional[int] = None
     chunk_overlap: Optional[int] = None
     force: bool = False
+
+
+class DocumentCategorizeRequest(BaseModel):
+    """Request for manual document categorization"""
+    force: bool = False  # Force re-categorization even if already categorized
+
+
+class DocumentUpdateCategoriesRequest(BaseModel):
+    """Request for updating document categories manually"""
+    categories: List[str] = Field(min_length=1, max_length=5)
+
+
+class CategoryInfo(BaseModel):
+    """Category information with metadata"""
+    name: str
+    icon: str
+    description: str
+    subcategories: List[str] = Field(default_factory=list)
+    document_count: int = 0
+
+
+class CategoryListResponse(BaseModel):
+    """Response for category listing"""
+    categories: List[CategoryInfo]
+    total_categories: int = Field(alias="totalCategories")
+    
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CategoryStatistics(BaseModel):
+    """Statistics about document categories"""
+    total_documents: int = Field(alias="totalDocuments")
+    categorized_documents: int = Field(alias="categorizedDocuments")
+    category_counts: Dict[str, int] = Field(alias="categoryCounts")
+    avg_categories_per_doc: float = Field(alias="avgCategoriesPerDoc")
+    avg_confidence: float = Field(alias="avgConfidence")
+    language_distribution: Dict[str, int] = Field(alias="languageDistribution")
+    method_distribution: Dict[str, int] = Field(alias="methodDistribution")
+    
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class Citation(BaseModel):

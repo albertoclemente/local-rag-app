@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start -p 3000",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test --reporter=line",
+    "test:e2e:attached": "PW_WEB_SERVERS=0 playwright test --reporter=line",
+    "test:e2e:managed": "PW_WEB_SERVERS=1 playwright test --reporter=line"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.7",
@@ -35,6 +38,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
+    "@playwright/test": "^1.47.2",
     "eslint-config-next": "15.5.2",
     "tailwindcss": "^4",
     "typescript": "^5"

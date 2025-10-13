@@ -18,6 +18,13 @@ export interface Document {
   embedding_status?: string
   type?: string
   chunkCount?: number
+  // AI-powered categorization fields
+  categories?: string[]
+  categoryConfidence?: number
+  categoryGeneratedAt?: string
+  categoryMethod?: 'auto' | 'manual' | 'llm' | 'keyword'
+  categoryLanguage?: string
+  categorySubcategories?: Record<string, string[]>
 }
 
 export interface DocumentUploadRequest {
@@ -29,6 +36,33 @@ export interface DocumentUploadRequest {
 export interface DocumentUpdateRequest {
   title?: string
   tags?: string[]
+}
+
+export interface CategoryInfo {
+  name: string
+  icon: string
+  description: string
+  subcategories: string[]
+  document_count: number
+  documentCount?: number  // Alias for compatibility
+}
+
+export interface CategoryStatistics {
+  totalDocuments: number
+  categorizedDocuments: number
+  categoryCounts: Record<string, number>
+  avgCategoriesPerDoc: number
+  avgConfidence: number
+  languageDistribution: Record<string, number>
+  methodDistribution: Record<string, number>
+}
+
+export interface DocumentCategorizeRequest {
+  force?: boolean
+}
+
+export interface DocumentUpdateCategoriesRequest {
+  categories: string[]
 }
 
 export interface ChunkResult {
