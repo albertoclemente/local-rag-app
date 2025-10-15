@@ -74,7 +74,8 @@ export const documentsApi = {
         'Content-Type': 'multipart/form-data',
       },
     })
-    return response.data
+    // Backend returns {document: Document, message: string, is_duplicate: boolean}
+    return response.data.document
   },
 
   // Get document by ID

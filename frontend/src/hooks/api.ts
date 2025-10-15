@@ -77,7 +77,8 @@ export function useUploadDocument() {
     mutationFn: documentsApi.uploadDocument,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents })
-      toast.success(`Document "${data.filename}" uploaded successfully`)
+      const docName = data.name || data.filename || 'Document'
+      toast.success(`Document "${docName}" uploaded successfully`)
     },
     onError: (error: any) => {
       const message = extractErrorMessage(error) || 'Failed to upload document'

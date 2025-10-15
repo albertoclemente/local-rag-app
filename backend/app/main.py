@@ -14,6 +14,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 import uvicorn
 
 from app.api_complete import router as api_router
@@ -117,7 +118,7 @@ def create_app() -> FastAPI:
         title="Local RAG WebApp",
         description="Local-only Retrieval-Augmented Generation web application",
         version="1.0.0",
-        docs_url="/api/docs" if settings.debug else None,
+        docs_url=None,  # Disable default docs
         redoc_url="/api/redoc" if settings.debug else None,
         lifespan=lifespan
     )
@@ -134,6 +135,95 @@ def create_app() -> FastAPI:
     # Include API routes
     app.include_router(api_router, prefix="/api")
     app.include_router(ws_router)
+    
+    # Custom Swagger UI with better styling (always available for local-only app)
+    @app.get("/api/docs", include_in_schema=False, response_class=HTMLResponse)
+    async def custom_swagger_ui_html():
+        """Custom Swagger UI with overflow fixes"""
+        return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{app.title} - API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+    <style>
+        /* Fix text overflow issues */
+        .swagger-ui .response-col_description__inner div.markdown,
+        .swagger-ui .response-col_description__inner div.renderedMarkdown,
+        .swagger-ui .response-col_description__inner p,
+        .swagger-ui .response-col_description__inner pre {{
+            max-width: 100%;
+            overflow-x: auto;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }}
+        
+        /* Fix code blocks */
+        .swagger-ui pre {{
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }}
+        
+        /* Fix example responses */
+        .swagger-ui .example,
+        .swagger-ui .example pre {{
+            max-width: 100%;
+            overflow-x: auto;
+        }}
+        
+        /* Fix long URLs */
+        .swagger-ui .opblock-summary-path,
+        .swagger-ui .opblock-body code {{
+            word-break: break-all;
+        }}
+        
+        /* Improve table responsiveness */
+        .swagger-ui table {{
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
+        }}
+        
+        /* Better scrolling for responses */
+        .swagger-ui .responses-inner {{
+            max-width: 100%;
+            overflow-x: auto;
+        }}
+        
+        /* Container width control */
+        .swagger-ui .wrapper {{
+            max-width: 1460px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        const ui = SwaggerUIBundle({{
+            url: "{app.openapi_url}",
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIBundle.SwaggerUIStandalonePreset
+            ],
+            layout: "BaseLayout",
+            defaultModelsExpandDepth: 1,
+            defaultModelExpandDepth: 1,
+            docExpansion: "list",
+            displayRequestDuration: true,
+            filter: true,
+            tryItOutEnabled: true,
+        }})
+    </script>
+</body>
+</html>
+            """
     
     # Serve frontend static files (in production)
     if not settings.debug:
