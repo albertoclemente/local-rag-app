@@ -5,7 +5,9 @@ A completely local Retrieval-Augmented Generation (RAG) web app for document Q&A
 ## ✨ Features
 
 - **100% local**: data never leaves your machine
-- **Multi-format document support**: PDF, DOCX, PPTX, HTML, Images (with OCR) — auto-converted to Markdown via Docling
+- **Multi-format document support**: PDF, DOCX, PPTX, HTML, Images (with OCR*) — auto-converted to Markdown via Docling
+- **AI-powered categorization**: automatic document categorization with confidence scores and subcategories
+- **Category filtering**: browse and filter documents by categories in the UI
 - **Smart RAG**: adaptive chunking + dynamic-k retrieval
 - **Conversation memory**: LLM remembers last 5 turns (10 messages) for follow-up questions
 - **Conversation history**: SQLite-based persistence with auto-generated AI titles
@@ -14,6 +16,8 @@ A completely local Retrieval-Augmented Generation (RAG) web app for document Q&A
 - **Performance profiles**: Eco / Balanced / Performance
 - **Modern UI**: Next.js 15 with dark/light theme support
 - **Message persistence**: Keeps your prompts visible even when switching conversations during generation
+
+_*OCR requires HuggingFace token - set `HF_TOKEN` environment variable to enable image processing_
 
 ## Simple Start (No Git Needed — for non‑experts)
 
@@ -78,7 +82,7 @@ Tips
 - If ports are busy: stop other apps using 3000/8000/6333 or reboot Docker Desktop.
 - To stop everything from the one‑command run, press Ctrl+C in the Terminal windows.
 
-## �🚀 Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -90,8 +94,8 @@ Tips
 ### 1) Clone
 
 ```bash
-git clone <repository-url>
-cd RAG_APP
+git clone https://github.com/albertoclemente/local-rag-app.git
+cd local-rag-app
 ```
 
 ### 2) Start vector database (Qdrant)
@@ -126,9 +130,10 @@ npm run dev
 ### 5) Open the app
 
 - UI: http://localhost:3000
-- API: http://localhost:8000
+- API docs: http://localhost:8000/api/docs
+- API health: http://localhost:8000/health
 
-If the page doesn’t load, give it a few seconds on first run and refresh.
+If the page doesn't load, give it a few seconds on first run and refresh.
 
 ## ⚡ Quick Try (one command)
 
@@ -160,7 +165,8 @@ chmod +x scripts/docker_up_and_open.sh
 
 Services
 - Frontend: http://localhost:3000
-- Backend: http://localhost:8000
+- Backend API docs: http://localhost:8000/api/docs
+- Backend health: http://localhost:8000/health
 - Qdrant: http://localhost:6333
 
 Notes
@@ -190,9 +196,18 @@ Migration
 
 ### Upload documents
 - Click the "Upload" button in the UI to add documents
-- **Supported formats**: PDF, DOCX, PPTX, HTML, Images (PNG, JPG)
+- **Supported formats**: PDF, DOCX, PPTX, HTML, Images (PNG, JPG, TIFF, BMP), Markdown, AsciiDoc
 - Documents are automatically converted to Markdown using Docling for better structure preservation
+- **Image OCR**: To enable OCR for images and scanned PDFs, set the `HF_TOKEN` environment variable with your HuggingFace token
+- **AI categorization**: Documents are automatically categorized by AI with confidence scores
 - The status bar shows indexing progress; the Documents list updates to "indexed"
+
+### Browse and filter documents
+- **Category filtering**: Use the category filter in the Documents panel to browse by category
+- **Search**: Use the search bar to find documents by name
+- **Tag filtering**: Filter documents by tags
+- **Category view**: Toggle "Group by Category" to organize documents by their categories
+- **Category statistics**: View category distribution and document counts in the UI
 
 ### Ask questions
 - Type queries in the chat input
@@ -238,6 +253,9 @@ OLLAMA_HOST=http://localhost:11434
 # Models
 RAG_LLM_MODEL=qwen2.5:7b-instruct  # or llama3.1:8b, etc.
 RAG_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+
+# OCR for images (optional - requires HuggingFace account)
+HF_TOKEN=your_huggingface_token_here
 
 # RAG parameters
 RAG_CHUNK_SIZE=800
@@ -289,6 +307,7 @@ RAG_APP/
 │   │   ├── retrieval.py            # Retrieval logic
 │   │   ├── llm.py                  # LLM service
 │   │   ├── markdown_converter.py   # Docling integration for document conversion
+│   │   ├── categorization.py       # AI-powered document categorization
 │   │   ├── conversation.py         # Conversation context management
 │   │   └── conversation_storage.py # SQLite-based conversation persistence
 │   └── data/
@@ -299,7 +318,8 @@ RAG_APP/
 │       │   ├── app-header.tsx           # Header with theme toggle
 │       │   ├── chat-view.tsx            # Main chat interface
 │       │   ├── conversation-history.tsx # Conversation sidebar
-│       │   ├── documents-panel.tsx      # Documents management
+│       │   ├── documents-panel.tsx      # Documents management with category filtering
+│       │   ├── category-badge.tsx       # Category display and filtering components
 │       │   └── status-bar.tsx           # Status indicator
 │       ├── hooks/
 │       │   └── api.ts                   # React Query hooks
@@ -313,7 +333,7 @@ RAG_APP/
 └── README.md
 ```
 
-## � Performance Profiles
+## 📊 Performance Profiles
 
 | Profile | CPU Usage | RAM Usage | Accuracy | Best For |
 |--------:|-----------|-----------|----------|----------|
@@ -373,6 +393,13 @@ docker compose -f docker/docker-compose.yml restart qdrant
 ollama list
 ollama pull qwen2.5:7b-instruct
 ```
+
+**Images not being processed / OCR not working**
+
+- Set the `HF_TOKEN` environment variable with your HuggingFace token
+- Create a token at https://huggingface.co/settings/tokens
+- Add to `backend/.env`: `HF_TOKEN=your_token_here`
+- Restart the backend server
 
 **Frontend shows timeout (~30s) or slow status**
 
