@@ -393,12 +393,32 @@ export RAG_MAX_CONTEXT_TOKENS=2000
 Application data (uploads, parsed, indices, logs) lives under `~/RAGApp/` by default.
 Logs are written to `~/RAGApp/logs/app.jsonl`.
 
+## 📦 Data Storage
+
+**Important**: The repository does NOT contain any of your documents, vectors, or embeddings. All data is stored locally on your machine.
+
+### What's stored in this repository:
+- ✅ Application source code (frontend, backend)
+- ✅ Configuration files and examples
+- ✅ Documentation (README files)
+- ✅ Scripts for setup and maintenance
+
+### What's stored locally (excluded from repository):
+- ❌ **Documents**: Your uploaded files (PDF, DOCX, etc.) are stored in `~/RAGApp/library/raw/`
+- ❌ **Parsed content**: Extracted text and metadata stored in `~/RAGApp/library/parsed/`
+- ❌ **Vector embeddings**: Generated embeddings stored in Qdrant vector database at `~/RAGApp/qdrant_data/`
+- ❌ **Conversation history**: SQLite database with chat history at `~/RAGApp/data/conversations.db`
+- ❌ **Logs**: Application logs at `~/RAGApp/logs/`
+
+All these directories are listed in `.gitignore` to ensure your private data never gets committed to the repository. The default storage location is `~/RAGApp/` (expandable via `RAG_DATA_DIR` environment variable).
+
 ## 🔒 Security & Privacy
 
 - Local processing: All operations happen on your machine
 - No external cloud calls: Works fully offline (Ollama + Qdrant local)
 - Optional encryption at rest and secure deletion supported
 - No telemetry or tracking
+- Your documents, vectors, and embeddings stay exclusively on your local machine
 
 ## 🤝 Contributing
 
