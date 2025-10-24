@@ -420,12 +420,21 @@ export RAG_MAX_CONTEXT_TOKENS=2000
 Application data (uploads, parsed, indices, logs) lives under `~/RAGApp/` by default.
 Logs are written to `~/RAGApp/logs/app.jsonl`.
 
+**Important**: All data files are excluded from version control via `.gitignore`:
+- Vector databases and embeddings (*.npy, *.npz, *.pkl, *.faiss, etc.)
+- Uploaded documents (*.pdf, *.docx, *.epub, etc.)
+- Data directories (vectors/, chunks/, qdrant_data/, uploads/, parsed/, indices/)
+
+The repository contains only source code and documentation — no user data or vectors are ever pushed to git.
+
 ## 🔒 Security & Privacy
 
-- Local processing: All operations happen on your machine
-- No external cloud calls: Works fully offline (Ollama + Qdrant local)
-- Optional encryption at rest and secure deletion supported
-- No telemetry or tracking
+- **Local processing**: All operations happen on your machine
+- **No external cloud calls**: Works fully offline (Ollama + Qdrant local)
+- **Data separation**: User data stored separately in `~/RAGApp/`, never in repository
+- **No data in version control**: Comprehensive `.gitignore` prevents accidental commits of vectors, documents, or embeddings
+- **Optional encryption** at rest and secure deletion supported
+- **No telemetry or tracking**
 
 ## 🤝 Contributing
 
